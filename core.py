@@ -453,7 +453,7 @@ class Tornado(EventPoller.Handler):
 
             # Wait for relayer to process the job and return the transaction hash
             count_attempts    : int = 0
-            count_attempts_max: int = 5
+            count_attempts_max: int = 10
             log.info(self.tag, f'withdraw(to={recipient}), waiting for job to be processed')
             wait(Second(5))
             def recursive_query():
