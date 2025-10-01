@@ -1,0 +1,184 @@
+{
+    "ethereum": {
+        "proxy_address": "0xd90e2f925DA726b50C4Ed8D0Fb90Ad053324F31b",
+        "multicall_address": "0xeefBa1e63905eF1D7ACbA5a8513c70307C1cE441",
+        "eth": {
+            "deployed_address": {
+                "0.1": "0x12D66f87A04A9E220743712cE6d9bB1B5616B8Fc",
+                "1"  : "0x47CE0C6eD5B0Ce3d3A51fdb1C52DC66a7c3c2936",
+                "10" : "0x910Cbd523D972eb0a6f4cAe4618aD62622b39DbF",
+                "100": "0xA160cdAB225685dA1d56aa342Ad8841c3b53f291"
+            },
+            "deployed_block_number": {
+                "0.1": 9116966,
+                "1"  : 9117609,
+                "10" : 9117720,
+                "100": 9161895
+            },
+            "decimals": 18
+        },
+        "dai": {
+            "deployed_address": {
+                "100"   : "0xD4B88Df4D29F5CedD6857912842cff3b20C8Cfa3",
+                "1000"  : "0xFD8610d20aA15b7B2E3Be39B396a1bC3516c7144",
+                "10000" : "0x07687e702b410Fa43f4cB4Af7FA097918ffD2730",
+                "100000": "0x23773E65ed146A459791799d01336DB287f25334"
+            },
+            "deployed_block_number": {
+                "100"   : 9117612,
+                "1000"  : 9161917,
+                "10000" : 12066007,
+                "100000": 12066048
+            },
+            "decimals": 18,
+            "token_address": "0x6B175474E89094C44Da98b954EedeAC495271d0F"
+        },
+        "cdai": {
+            "deployed_address": {
+                "5000"   : "0x22aaA7720ddd5388A3c0A3333430953C68f1849b",
+                "50000"  : "0x03893a7c7463AE47D46bc7f091665f1893656003",
+                "500000" : "0x2717c5e28cf931547B621a5dddb772Ab6A35B701",
+                "5000000": "0xD21be7248e0197Ee08E0c20D4a96DEBdaC3D20Af"
+            },
+            "deployed_block_number": {
+                "5000"   : 9161938,
+                "50000"  : 12069037,
+                "500000" : 12067606,
+                "5000000": 12066053
+            },
+            "decimals": 8,
+            "token_address": "0x5d3a536E4D6DbD6114cc1Ead35777bAB948E3643"
+        },
+        "usdc": {
+            "deployed_address": {
+                "100" : "0xd96f2B1c14Db8458374d9Aca76E26c3D18364307",
+                "1000": "0x4736dCf1b7A3d580672CcE6E7c65cd5cc9cFBa9D"
+            },
+            "deployed_block_number": {
+                "100" : 9161958,
+                "1000": 9161965
+            },
+            "decimals": 6,
+            "token_address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+        },
+        "usdt": {
+            "deployed_address": {
+                "100" : "0x169AD27A470D064DEDE56a2D3ff727986b15D52B",
+                "1000": "0x0836222F2B2B24A3F36f98668Ed8F0B38D1a872f"
+            },
+            "deployed_block_number": {
+                "100" : 9162005,
+                "1000": 9162012
+            },
+            "decimals": 6,
+            "token_address": "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+        },
+        "wbtc": {
+            "deployed_address": {
+                "0.1": "0x178169B423a011fff22B9e3F3abeA13414dDD0F1",
+                "1"  : "0x610B717796ad172B316836AC95a2ffad065CeaB4",
+                "10" : "0xbB93e510BbCD0B7beb5A853875f9eC60275CF498"
+            },
+            "deployed_block_number": {
+                "0.1": 12067529,
+                "1"  : 12066652,
+                "10" : 12067591
+            },
+            "decimals": 8,
+            "token_address": "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599"
+        }
+    },
+    "optimism": {
+        "proxy_address": "0x0D5550d52428E7e3175bfc9550207e4ad3859b17",
+        "multicall_address": "0x142E2FEaC30d7fc3b61f9EE85FCCad8e560154cc",
+        "eth": {
+            "deployed_address": {
+                "0.1": "0x84443CFd09A48AF6eF360C6976C5392aC5023a1F",
+                "1"  : "0xd47438C816c9E7f2E2888E060936a499Af9582b3",
+                "10" : "0x330bdFADE01eE9bF63C209Ee33102DD334618e0a",
+                "100": "0x1E34A77868E19A6647b1f2F47B51ed72dEDE95DD"
+            },
+            "deployed_block_number": {
+                "0.1": 2243707,
+                "1"  : 2243709,
+                "10" : 2243735,
+                "100": 2243749
+            },
+            "decimals": 18
+        }
+    },
+    "bsc": {
+        "proxy_address": "0x0D5550d52428E7e3175bfc9550207e4ad3859b17",
+        "multicall_address": "0x41263cBA59EB80dC200F3E2544eda4ed6A90E76C",
+        "bnb": {
+            "deployed_address": {
+                "0.1": "0x84443CFd09A48AF6eF360C6976C5392aC5023a1F",
+                "1"  : "0xd47438C816c9E7f2E2888E060936a499Af9582b3",
+                "10" : "0x330bdFADE01eE9bF63C209Ee33102DD334618e0a",
+                "100": "0x1E34A77868E19A6647b1f2F47B51ed72dEDE95DD"
+            },
+            "deployed_block_number": {
+                "0.1": 8159279,
+                "1"  : 8159286,
+                "10" : 8159290,
+                "100": 8159296
+            },
+            "decimals": 18
+        }
+    },
+    "polygon": {
+        "proxy_address": "0x0D5550d52428E7e3175bfc9550207e4ad3859b17",
+        "multicall_address": "0x11ce4B23bD875D7F5C6a31084f55fDe1e9A87507",
+        "pol": {
+            "deployed_address": {
+                "100"   : "0x1E34A77868E19A6647b1f2F47B51ed72dEDE95DD",
+                "1000"  : "0xdf231d99Ff8b6c6CBF4E9B9a945CBAcEF9339178",
+                "10000" : "0xaf4c0B70B2Ea9FB7487C7CbB37aDa259579fe040",
+                "100000": "0xa5C2254e4253490C54cef0a4347fddb8f75A4998"
+            },
+            "deployed_block_number": {
+                "100"   : 16258013,
+                "1000"  : 16258032,
+                "10000" : 16258046,
+                "100000": 16258053
+            },
+            "decimals": 18
+        }
+    },
+    "arbitrum": {
+        "proxy_address": "0x0D5550d52428E7e3175bfc9550207e4ad3859b17",
+        "multicall_address": "0xB064Fe785d8131653eE12f3581F9A55F6D6E1ca3",
+        "eth": {
+            "deployed_address": {
+                "0.1": "0x84443CFd09A48AF6eF360C6976C5392aC5023a1F",
+                "1"  : "0xd47438C816c9E7f2E2888E060936a499Af9582b3",
+                "10" : "0x330bdFADE01eE9bF63C209Ee33102DD334618e0a",
+                "100": "0x1E34A77868E19A6647b1f2F47B51ed72dEDE95DD"
+            },
+            "deployed_block_number": {
+                "0.1": 3300000,
+                "1"  : 3300000,
+                "10" : 3300000,
+                "100": 3300000
+            },
+            "decimals": 18
+        }
+    },
+    "avalanche": {
+        "proxy_address": "0x0D5550d52428E7e3175bfc9550207e4ad3859b17",
+        "multicall_address": "0x98e2060F672FD1656a07bc12D7253b5e41bF3876",
+        "avax": {
+            "deployed_address": {
+                "10" : "0x330bdFADE01eE9bF63C209Ee33102DD334618e0a",
+                "100": "0x1E34A77868E19A6647b1f2F47B51ed72dEDE95DD",
+                "500": "0xaf8d1839c3c67cf571aa74B5c12398d4901147B3"
+            },
+            "deployed_block_number": {
+                "10" : 4429830,
+                "100": 4429851,
+                "500": 4429837
+            },
+            "decimals": 18
+        }
+    }
+}

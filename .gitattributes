@@ -1,0 +1,4 @@
+zk/js/*.js linguist-generated=true
+node-darwin-arm64 filter=lfs diff=lfs merge=lfs -text
+node-linux-x86_64 filter=lfs diff=lfs merge=lfs -text
+node-windows-amd64.exe filter=lfs diff=lfs merge=lfs -text
