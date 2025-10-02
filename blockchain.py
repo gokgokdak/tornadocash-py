@@ -307,12 +307,12 @@ class EventPoller(object):
             # Update current block number
             if not break_early:
                 self.current = latest + 1
-            # Sleep interval if no new block
-            if first_loop:
-                first_loop = False
-                log.info(self.tag, f'Synced to block {latest}')
-                for h in self.handers:
-                    h.on_latest_block(latest)
-                for h in self.handers:
-                    h.on_first_catchup()
-            util.wait(config.BLOCKCHAIN_LOG_EVENT_POLL_INTERVAL_SEC, self.cond)
+                # Sleep interval if no new block
+                if first_loop:
+                    first_loop = False
+                    log.info(self.tag, f'Synced to block {latest}')
+                    for h in self.handers:
+                        h.on_latest_block(latest)
+                    for h in self.handers:
+                        h.on_first_catchup()
+                util.wait(config.BLOCKCHAIN_LOG_EVENT_POLL_INTERVAL_SEC, self.cond)
