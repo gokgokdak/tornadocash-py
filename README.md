@@ -10,7 +10,7 @@
 
 A Python implementation to interact with Tornado Cash smart contracts.  
 
-Similar to the original [tornadocash-cli](https://github.com/tornadocash/tornado-cli), but more features and better experience
+Similar to the original [tornado-cli](https://github.com/tornadocash/tornado-cli), but more features and better experience
 
 
 ## Preparations
@@ -70,7 +70,7 @@ It is recommended to keep the program running to stay synchronized with the bloc
 
 ### Deposit
 
-The private key is used to pay for gas fees, make sure it has enough ETH.
+The private key is used to provide ETH and pay for gas fees, make sure it has enough balance.
 ```bash
 # python cli.py --deposit <key> <chain> <symbol> <unit>
 python cli.py --deposit 0xcc8146a803a089b4a9fbf68c7e8ea9084ad682ca37603c39a7cfff18c0f3819c ethereum eth 0.1
