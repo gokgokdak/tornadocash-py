@@ -94,6 +94,13 @@ def get_option() -> tuple[str, argparse.Namespace] | None:
         help="Check if the note has been withdrawn\n"
              "<note>: Tornado note text created by deposit"
     )
+    parser.add_argument(
+        '--note_detail',
+        required=False,
+        metavar="<note>",
+        help="Print nullifier hash and commitment of the note\n"
+             "<note>: Tornado note text created by deposit"
+    )
     args = parser.parse_args()
 
     # Check and get enabled option
@@ -178,6 +185,20 @@ def handle_option(enabled_arg: str, args: argparse.Namespace) -> None:
         note_deposited(str(args.note_deposited))
     elif enabled_arg == 'note_withdrawn':
         note_withdrawn(str(args.note_withdrawn))
+    elif enabled_arg == 'note_detail':
+        parsed: tuple[ChainID, Symbol, TornadoUnit, Note] | None = Note.from_text(str(args.note_detail))
+        if parsed is None:
+            log.error(f'Failed to parse note: "{args.note_detail}"')
+            return
+        chain, symbol, unit, note = parsed
+        log.info(tag, f'Note detail:\n'
+                      f'  Chain         : {util.upper_first_char(chain_to_string(chain))}({hex(chain.value)})\n'
+                      f'  Symbol        : {symbol.value.upper()}\n'
+                      f'  Unit          : {unit.value}\n'
+                      f'  Nullifier     : 0x{note.nullifier.hex().zfill(62)}\n'
+                      f'  Secret        : 0x{note.secret.hex().zfill(62)}\n'
+                      f'  Nullifier Hash: 0x{note.nullifier_hash.hex().zfill(64)}\n'
+                      f'  Commitment    : 0x{note.commitment.hex().zfill(64)}')
 
 
 def _sync(tornado: Tornado, keep: bool, signal: threading.Condition | None = None) -> None:
