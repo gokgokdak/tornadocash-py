@@ -230,10 +230,11 @@ class EventPoller(object):
                     continue
             count_block = latest - self.current + 1
 
+            # Notify latest block number
+            for h in self.handers:
+                h.on_latest_block(latest)
             # Log how many blocks behind
             if first_loop:
-                for h in self.handers:
-                    h.on_latest_block(latest)
                 log.info(self.tag, f'{count_block} blocks behind, latest block number: {latest}')
 
             # Split into 10000 blocks per request
@@ -307,12 +308,14 @@ class EventPoller(object):
             # Update current block number
             if not break_early:
                 self.current = latest + 1
-                # Sleep interval if no new block
+                # Notify latest block number
+                for h in self.handers:
+                    h.on_latest_block(latest)
+                # Notify first catchup
                 if first_loop:
                     first_loop = False
                     log.info(self.tag, f'Synced to block {latest}')
                     for h in self.handers:
-                        h.on_latest_block(latest)
-                    for h in self.handers:
                         h.on_first_catchup()
+                # Sleep interval if no new block
                 util.wait(config.BLOCKCHAIN_LOG_EVENT_POLL_INTERVAL_SEC, self.cond)
