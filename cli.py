@@ -30,7 +30,7 @@ def get_option() -> tuple[str, argparse.Namespace] | None:
         nargs=3,
         metavar=("<chain>", "<symbol>", "<unit>"),
         help="Sync events from the blockchain\n"
-             "<chain> : Supported values: ethereum, optimism, bsc, polygon, arbitrum, avalanche. Case insensitive\n"
+             "<chain> : Supported values: ethereum, optimism, bsc, polygon, arbitrum, avalanche, sepolia. Case insensitive\n"
              "<symbol>: Coin symbol, eg: eth, bnb, avac, dai, etc. Case insensitive\n"
              "<unit>  : Tornado unit of coins, eg: 0.1, 1, 10, etc."
     )
@@ -56,7 +56,7 @@ def get_option() -> tuple[str, argparse.Namespace] | None:
         metavar=("<key>", "<chain>", "<symbol>", "<unit>"),
         help="Make a deposit\n"
              "<key>   : Private key in Hex string, '0x' prefix is optional\n"
-             "<chain> : Supported values: ethereum, optimism, bsc, polygon, arbitrum, avalanche. Case insensitive\n"
+             "<chain> : Supported values: ethereum, optimism, bsc, polygon, arbitrum, avalanche, sepolia. Case insensitive\n"
              "<symbol>: Coin symbol, eg: eth, bnb, avax, dai, etc. Case insensitive\n"
              "<unit>  : Tornado unit of coins, eg: 0.1, 1, 10, etc."
     )

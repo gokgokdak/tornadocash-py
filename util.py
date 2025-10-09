@@ -91,6 +91,8 @@ def get_chain_native_symbol(chain: ChainID) -> Symbol:
         return Symbol.ETH
     elif chain == ChainID.AVALANCHE:
         return Symbol.AVAX
+    elif chain == ChainID.SEPOLIA:
+        return Symbol.ETH
     else:
         raise ValueError(f"Unknown chain: {chain}")
 

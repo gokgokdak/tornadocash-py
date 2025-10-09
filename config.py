@@ -14,6 +14,7 @@ RPC_URLS: dict[ChainID, str] = {
     ChainID.POLYGON  : 'https://polygon-bor-rpc.publicnode.com',
     ChainID.ARBITRUM : 'https://arbitrum-one-rpc.publicnode.com',
     ChainID.AVALANCHE: 'https://avalanche-c-chain-rpc.publicnode.com',
+    ChainID.SEPOLIA  : 'https://ethereum-sepolia-rpc.publicnode.com',
 }
 
 # Time interval in seconds to retry RPC calls if they fail

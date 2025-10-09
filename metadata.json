@@ -180,5 +180,22 @@
             },
             "decimals": 18
         }
+    },
+    "sepolia": {
+        "proxy_address": "0x1572AFE6949fdF51Cb3E0856216670ae9Ee160Ee",
+        "multicall_address": "0x53c43764255c17bd724f74c4ef150724ac50a3ed",
+        "eth": {
+            "deployed_address": {
+                "0.1": "0x8C4A04d872a6C1BE37964A21ba3a138525dFF50b",
+                "1"  : "0x8cc930096B4Df705A007c4A039BDFA1320Ed2508",
+                "10" : "0x8D10d506D29Fc62ABb8A290B99F66dB27Fc43585"
+            },
+            "deployed_block_number": {
+                "0.1": 5594400,
+                "1"  : 5594401,
+                "10" : 5594402
+            },
+            "decimals": 18
+        }
     }
 }

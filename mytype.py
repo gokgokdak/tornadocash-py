@@ -24,12 +24,13 @@ class Second(float):
 
 
 class ChainID(Enum):
-    ETHEREUM  = 0x01    # 1
-    BSC       = 0x38    # 56
-    OPTIMISM  = 0x0a    # 10
-    POLYGON   = 0x89    # 137
-    ARBITRUM  = 0xa4b1  # 42161
-    AVALANCHE = 0xa86a  # 43114
+    ETHEREUM  = 0x01        # 1
+    BSC       = 0x38        # 56
+    OPTIMISM  = 0x0a        # 10
+    POLYGON   = 0x89        # 137
+    ARBITRUM  = 0xa4b1      # 42161
+    AVALANCHE = 0xa86a      # 43114
+    SEPOLIA   = 0xaa36a7    # 11155111
 
 
 def chain_to_string(chain: ChainID) -> str:
@@ -45,6 +46,8 @@ def chain_to_string(chain: ChainID) -> str:
         return 'arbitrum'
     elif chain == ChainID.AVALANCHE:
         return 'avalanche'
+    elif chain == ChainID.SEPOLIA:
+        return 'sepolia'
     raise ValueError(f'Unsupported chain: {chain}')
 
 
@@ -62,6 +65,8 @@ def string_to_chain(text: str) -> ChainID:
         return ChainID.ARBITRUM
     elif text.strip().lower() == 'avalanche':
         return ChainID.AVALANCHE
+    elif text.strip().lower() == 'sepolia':
+        return ChainID.SEPOLIA
     raise ValueError(f'Unsupported chain: {text}')
 
 

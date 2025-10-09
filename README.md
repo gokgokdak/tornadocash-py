@@ -248,6 +248,9 @@ Last updated: August 17, 2025
 | Avalanche | AVAX   | 10      | [0x330bdFADE01eE9bF63C209Ee33102DD334618e0a](https://avascan.info/blockchain/c/address/0x330bdFADE01eE9bF63C209Ee33102DD334618e0a) |
 | Avalanche | AVAX   | 100     | [0x1E34A77868E19A6647b1f2F47B51ed72dEDE95DD](https://avascan.info/blockchain/c/address/0x1E34A77868E19A6647b1f2F47B51ed72dEDE95DD) |
 | Avalanche | AVAX   | 500     | [0xaf8d1839c3c67cf571aa74B5c12398d4901147B3](https://avascan.info/blockchain/c/address/0xaf8d1839c3c67cf571aa74B5c12398d4901147B3) |
+| Sepolia   | ETH    | 0.1     | [0x8C4A04d872a6C1BE37964A21ba3a138525dFF50b](https://sepolia.etherscan.io/address/0x8C4A04d872a6C1BE37964A21ba3a138525dFF50b)      |
+| Sepolia   | ETH    | 1       | [0x8cc930096B4Df705A007c4A039BDFA1320Ed2508](https://sepolia.etherscan.io/address/0x8cc930096B4Df705A007c4A039BDFA1320Ed2508)      |
+| Sepolia   | ETH    | 10      | [0x8D10d506D29Fc62ABb8A290B99F66dB27Fc43585](https://sepolia.etherscan.io/address/0x8D10d506D29Fc62ABb8A290B99F66dB27Fc43585)      |
 
 
 ## Buy me a coffee
