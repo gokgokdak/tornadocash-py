@@ -212,9 +212,9 @@ class SQLite(Interface):
         for e in deposits:
             if e.leaf_index > leaf_index:
                 leaf_index = e.leaf_index
-            sql.append(f'INSERT INTO t_event_deposit(timestamp, blk_num, tx_hash, commitment, leaf_index) SELECT {e.timestamp}, {e.blk_num}, "{e.tx_hash.to_0x_hex()}", "{e.commitment.to_0x_hex()}", {e.leaf_index} WHERE NOT EXISTS (SELECT 1 FROM t_event_deposit WHERE tx_hash="{e.tx_hash.to_0x_hex()}" AND commitment="{e.commitment.to_0x_hex()}");')
+            sql.append(f'INSERT INTO t_event_deposit(timestamp, blk_num, tx_hash, commitment, leaf_index) SELECT {e.timestamp}, {e.blk_num}, "{e.tx_hash.to_0x_hex()}", "{e.commitment.to_0x_hex()}", {e.leaf_index} WHERE NOT EXISTS (SELECT 1 FROM t_event_deposit WHERE tx_hash=\'{e.tx_hash.to_0x_hex()}\' AND commitment=\'{e.commitment.to_0x_hex()}\');')
         for e in withdrawals:
-            sql.append(f'INSERT INTO t_event_withdraw(blk_num, tx_hash, nullifier_hash, recipient, fee) SELECT {e.blk_num}, "{e.tx_hash.to_0x_hex()}", "{e.nullifier_hash.to_0x_hex()}", "{e.recipient}", "{str(e.fee)}" WHERE NOT EXISTS (SELECT 1 FROM t_event_withdraw WHERE tx_hash="{e.tx_hash.to_0x_hex()}" AND nullifier_hash="{e.nullifier_hash.to_0x_hex()}");')
+            sql.append(f'INSERT INTO t_event_withdraw(blk_num, tx_hash, nullifier_hash, recipient, fee) SELECT {e.blk_num}, "{e.tx_hash.to_0x_hex()}", "{e.nullifier_hash.to_0x_hex()}", "{e.recipient}", "{str(e.fee)}" WHERE NOT EXISTS (SELECT 1 FROM t_event_withdraw WHERE tx_hash=\'{e.tx_hash.to_0x_hex()}\' AND nullifier_hash=\'{e.nullifier_hash.to_0x_hex()}\');')
         if leaf_index >= 0:
             sql.append(f'UPDATE t_info SET latest_leaf_index = {leaf_index} WHERE latest_leaf_index < {leaf_index};')
         with self.mutex:
