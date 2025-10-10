@@ -73,17 +73,17 @@ It is recommended to keep the program running to stay synchronized with the bloc
 The private key is used to provide ETH and pay for gas fees, make sure it has enough balance.
 ```bash
 # python cli.py --deposit <key> <chain> <symbol> <unit>
-python cli.py --deposit 0xcc8146a803a089b4a9fbf68c7e8ea9084ad682ca37603c39a7cfff18c0f3819c ethereum eth 0.1
+python cli.py --deposit 0x0f36dead4beafdead4beafdead4beafdead4beafdead4beafdead4beafde9a66 sepolia eth 0.1
 ```
 
 If succeeded, you will see logs like below, and the generated note will be printed to the console and saved to a backup file under the `./backup` directory.  
 The `note` has full access to the deposited funds, please keep it private and secure.
 ```log
-[I 2025-09-29 09:26:32:783 tid=37096 cli] Depositing Ethereum 100 eth (cli.py:256)
-[I 2025-09-29 09:26:32:874 tid=37096 cli] IMPORTANT: Please save the note text below and keep it private (cli.py:270)
-[I 2025-09-29 09:26:32:874 tid=37096 cli] IMPORTANT: ethereum-eth-100-d4b9eef6d4b5c152f6fc7a7842e354f1bebb3795ad6fa232e2568a92e51215-4b77e64ae4139af8f2c4d3903ce56ef05ec7078b997b27d7be9c6b160e4074 (cli.py:271)
-[I 2025-09-29 09:26:37:747 tid=37096 Tornado] deposit(from=0x1D7d988c91780135Ae5795512AC1497973CB7122) succeed, tx hash: 0x0ac61cb93b89ec691647b9013dc55354116dcf3356564ee16fd7378133ebc66a (core.py:247)
-[I 2025-09-29 09:26:37:747 tid=37096 cli] IMPORTANT: Note backup saved to /home/user/tornadocash-py/backup/2025-07-11_07.16.22.451_ethereum_eth_100.txt (cli.py:279)
+[I 2025-10-10 10:22:21:477 tid=43284 cli] Depositing Sepolia 0.1 eth (cli.py:357)
+[I 2025-10-10 10:22:21:570 tid=43284 cli] IMPORTANT: Please save the note text below and keep it private (cli.py:377)
+[I 2025-10-10 10:22:21:570 tid=43284 cli] IMPORTANT: sepolia-eth-0.1-d27c296fdb802bea47c3675b296a67a72daf9ad7398f4c5ba57c897d2e3215-0a2cda03f6c56f7e3b65cef86fb228db9ab6e5630078101d77fb80a93fe81f (cli.py:378)
+[I 2025-10-10 10:22:26:970 tid=43284 Tornado] deposit(from=0xA09CBdDb54c7bD239F80b252d25002001580BafF) succeed, tx hash: 9607560ad3795d860e1be630ba32c121540f88c0d662d1782ede29eb46b0afe5 (core.py:271)
+[I 2025-10-10 10:22:26:971 tid=43284 cli] IMPORTANT: Note backup saved to /home/nova/tornadocash-py/backup/2025-10-10_10.22.21.570_sepolia_eth_0.1.txt (cli.py:388)
 ```
 
 ### Batch Deposit
@@ -92,23 +92,50 @@ A very convenient way if you have multiple addresses on different chains that ho
 
 ```bash
 # python cli.py --deposit_batch <key> <json>
-python cli.py --deposit_batch 0xcc8146a803a089b4a9fbf68c7e8ea9084ad682ca37603c39a7cfff18c0f3819c \
-"{ \
-    'ethereum': { \
-        'eth': { \
-            '10': 100, \
-            '100': 20 \
-        } \
-    }, \
-    'polygon': { \
-        'pol': { \
-            '100000': 1000 \
-        } \
-    } \
-}"
+python cli.py --deposit_batch 0x0f36dead4beafdead4beafdead4beafdead4beafdead4beafdead4beafde9a66 "{'ethereum':{'eth':{'10':100,'100':20}},'polygon':{'pol':{'100000':1000}}}"
+```
 
-# Or without newline
-python cli.py --deposit_batch 0xcc8146a803a089b4a9fbf68c7e8ea9084ad682ca37603c39a7cfff18c0f3819c "{'ethereum':{'eth':{'10':100,'100':20}},'polygon':{'pol':{'100000':1000}}}"
+
+### Offline Deposit
+
+Create a note on the offline machine, scan the QR code or copy the invoice text to the online machine  
+```bash
+# python cli.py --create_note <chain> <symbol> <unit>
+> python cli.py --create_note sepolia eth 0.1
+[I 2025-10-10 09:46:45:111 tid=39724 stdout]  ▄▄▄▄▄▄▄ ▄▄▄         ▄ ▄▄▄  ▄  ▄▄▄▄▄▄▄ 
+[I 2025-10-10 09:46:45:111 tid=39724 stdout]  █ ▄▄▄ █  █▄█ ▀ ███ █▄█▀▄█▀▄▄█ █ ▄▄▄ █ 
+[I 2025-10-10 09:46:45:112 tid=39724 stdout]  █ ███ █ ██ █▄▀█▄█▄  █ ████ █▀ █ ███ █ 
+[I 2025-10-10 09:46:45:112 tid=39724 stdout]  █▄▄▄▄▄█ █ █ █ ▄ ▄ █▀▄▀▄ █▀▄ █ █▄▄▄▄▄█ 
+[I 2025-10-10 09:46:45:113 tid=39724 stdout]  ▄   ▄ ▄▄█▄▀█▄▄▄███▄▄▀█▄ ▀ ▄▀█▄▄▄▄▄  ▄ 
+[I 2025-10-10 09:46:45:113 tid=39724 stdout]   ▄██▄█▄▄ ▄█▀█▄ ▄ ▄  █▄▄█▀▀ █▄▀ █▀█▄▀  
+[I 2025-10-10 09:46:45:113 tid=39724 stdout]  ▀  ▄▀▀▄▀ ██  ▀▄▀▀█▀█▄█▀█▄ █ █▄▄▄  █▄▄ 
+[I 2025-10-10 09:46:45:114 tid=39724 stdout]  █ ▄  ▀▄    ▀ █▄█▀▄▀ ▄ ▀█▄▀▄█▄▀ ▄▀▄▄█  
+[I 2025-10-10 09:46:45:114 tid=39724 stdout]    ▀ ▄ ▄ █ ██▀  ▀ █ ▄ █▀▀▀ █▄ ▀▄█▀ ██▄ 
+[I 2025-10-10 09:46:45:114 tid=39724 stdout]  █     ▄▀▀ █ ▀ ▄ █ █ ▀███▀█ ██▀ ▄█     
+[I 2025-10-10 09:46:45:114 tid=39724 stdout]  ▄█▀ ▀▀▄▄█▀▀▄▀ █▄▄█▄▄▄█ ▀█ ▄  █▄▄ ██ █ 
+[I 2025-10-10 09:46:45:114 tid=39724 stdout]  █  ▀█ ▄   ▄▄▄  █     ▄▀█ ▀▄█▄▄ █▀▀▀   
+[I 2025-10-10 09:46:45:114 tid=39724 stdout]  ▀█▀▄▄█▄   █▀▄▀▄███▀█ █ ▀  ▀▀██▄▄  ██▄ 
+[I 2025-10-10 09:46:45:115 tid=39724 stdout]  ▀▀▀ ██▄▀ ▄▄ ▄█ ▄  ▀ ▀███▀█▀█ ▄▄ ▀▄▄▀  
+[I 2025-10-10 09:46:45:115 tid=39724 stdout]  ▄▄▄▄▄ ▄▄▀▀▄▄█▀▄▀██▄▄▀█▀ ▀  ▀██▄▄▄██▀▄ 
+[I 2025-10-10 09:46:45:115 tid=39724 stdout]  ▄▄▄▄▄▄▄ █ ▀▄▄▄██▄   █ █████▀█ ▄ ███   
+[I 2025-10-10 09:46:45:115 tid=39724 stdout]  █ ▄▄▄ █ ▄   ▄▄   ▀▄ ▄█▄    ▀█▄▄▄█ █▄▄ 
+[I 2025-10-10 09:46:45:115 tid=39724 stdout]  █ ███ █  ▄█ ▀▄█ █ █ ▄▄ █▀▀█▀ ▄██ ▀ ▀▀ 
+[I 2025-10-10 09:46:45:116 tid=39724 stdout]  █▄▄▄▄▄█ ▄▄ █▄▀▀▄▄█▄▄ █▀ █ ▀█ █ █ ███▄ 
+[I 2025-10-10 09:46:45:116 tid=39724 stdout]                                        
+[I 2025-10-10 09:46:45:116 tid=39724 cli] Scan the QR code to transfer the invoice to online machine (cli.py:532)
+[I 2025-10-10 09:46:45:116 tid=39724 cli] IMPORTANT: Please save the note text below and keep it private (cli.py:533)
+[I 2025-10-10 09:46:45:116 tid=39724 cli] Note     : sepolia-eth-0.1-e7d384e9ee682ea4c209893b0d618094bedfb7b580400686fc6ef350514667-bb5654636d95ffb21235a79cb504a847f4c0eba695346491fa105761e7a0f8 (cli.py:534)
+[I 2025-10-10 09:46:45:116 tid=39724 cli] Invoice  : sepolia-eth-0.1-122ec0ef7098492ae61f26695edd4c070ca40ca6b1455ff64843f53ad03780cb (cli.py:535)
+[I 2025-10-10 09:46:45:116 tid=39724 cli] IMPORTANT: Note backup saved to /home/nova/tornadocash-py/backup/2025-10-10_09.46.45.105_sepolia_eth_0.1.txt (cli.py:536)
+```
+
+
+On the online machine, use the `--deposit_invoice` command to make the deposit.  
+```bash
+# python cli.py --deposit_invoice <key> <invoice>
+> python cli.py --deposit_invoice 0x0f36dead4beafdead4beafdead4beafdead4beafdead4beafdead4beafde9a66 sepolia-eth-0.1-122ec0ef7098492ae61f26695edd4c070ca40ca6b1455ff64843f53ad03780cb
+[I 2025-10-10 09:48:57:807 tid=35492 cli] Depositing Sepolia 0.1 eth (cli.py:357)
+[I 2025-10-10 09:49:03:674 tid=35492 Tornado] deposit(from=0xA09CBdDb54c7bD239F80b252d25002001580BafF) succeed, tx hash: b16ed68f119b80e8e8a3a3df65bf590917fa4262518b5ed2ff680c8511490bca (core.py:271)
 ```
 
 
@@ -118,17 +145,17 @@ The private key is used to pay for gas fees, make sure it has enough ETH.
 ```bash
 # python cli.py --withdraw <note> <recipient> <key/relayer_url>
 python cli.py --withdraw \
-    ethereum-eth-10-d9a5f2eb782a50932fec4fdeecf0bda409070686caecb68bfd9822192f6626-14e44248c0956fba5259651f617a771ac54c3df2a65e64392bd30203e66f1c \
-    0x19C0fB4ED55da0da6064b1fA84F557F6CCd6B39f \
-    0xcc8146a803a089b4a9fbf68c7e8ea9084ad682ca37603c39a7cfff18c0f3819c
+    sepolia-eth-0.1-e7d384e9ee682ea4c209893b0d618094bedfb7b580400686fc6ef350514667-bb5654636d95ffb21235a79cb504a847f4c0eba695346491fa105761e7a0f8 \
+    0xA09CBdDb54c7bD239F80b252d25002001580BafF \
+    0x0f36dead4beafdead4beafdead4beafdead4beafdead4beafdead4beafde9a66
 ```
 
 With a relayer service, the private key is not required, but the relayer will charge a fee from the withdrawn amount.
 ```bash
 # python cli.py --withdraw <note> <recipient> <key/relayer_url>
 python cli.py --withdraw \
-    ethereum-eth-10-d9a5f2eb782a50932fec4fdeecf0bda409070686caecb68bfd9822192f6626-14e44248c0956fba5259651f617a771ac54c3df2a65e64392bd30203e66f1c \
-    0x19C0fB4ED55da0da6064b1fA84F557F6CCd6B39f \
+    sepolia-eth-0.1-e7d384e9ee682ea4c209893b0d618094bedfb7b580400686fc6ef350514667-bb5654636d95ffb21235a79cb504a847f4c0eba695346491fa105761e7a0f8 \
+    0xA09CBdDb54c7bD239F80b252d25002001580BafF \
     https://eth.t-relayer.com
 ```
 
@@ -137,34 +164,34 @@ The withdrawal takes about 30 seconds with the prefetched database cache, the la
 
 If succeeded, you will see logs like below.  
 ```log
-[I 2025-09-29 09:29:07:403 tid=2496 Tornado] Rebuilding merkle tree from database, please wait... (core.py:77)
-[I 2025-09-29 09:29:10:633 tid=2496 MerkleTree.Memory] Level 0 rebuilt, size: 41187 (merkle_tree.py:128)
-[I 2025-09-29 09:29:12:289 tid=2496 MerkleTree.Memory] Level 1 rebuilt, size: 20594 (merkle_tree.py:128)
-[I 2025-09-29 09:29:13:102 tid=2496 MerkleTree.Memory] Level 2 rebuilt, size: 10297 (merkle_tree.py:128)
-[I 2025-09-29 09:29:13:505 tid=2496 MerkleTree.Memory] Level 3 rebuilt, size: 5149 (merkle_tree.py:128)
-[I 2025-09-29 09:29:13:715 tid=2496 MerkleTree.Memory] Level 4 rebuilt, size: 2575 (merkle_tree.py:128)
-[I 2025-09-29 09:29:13:819 tid=2496 MerkleTree.Memory] Level 5 rebuilt, size: 1288 (merkle_tree.py:128)
-[I 2025-09-29 09:29:13:869 tid=2496 MerkleTree.Memory] Level 6 rebuilt, size: 644 (merkle_tree.py:128)
-[I 2025-09-29 09:29:13:894 tid=2496 MerkleTree.Memory] Level 7 rebuilt, size: 322 (merkle_tree.py:128)
-[I 2025-09-29 09:29:13:907 tid=2496 MerkleTree.Memory] Level 8 rebuilt, size: 161 (merkle_tree.py:128)
-[I 2025-09-29 09:29:13:913 tid=2496 MerkleTree.Memory] Level 9 rebuilt, size: 81 (merkle_tree.py:128)
-[I 2025-09-29 09:29:13:917 tid=2496 MerkleTree.Memory] Level 10 rebuilt, size: 41 (merkle_tree.py:128)
-[I 2025-09-29 09:29:13:919 tid=2496 MerkleTree.Memory] Level 11 rebuilt, size: 21 (merkle_tree.py:128)
-[I 2025-09-29 09:29:13:920 tid=2496 MerkleTree.Memory] Level 12 rebuilt, size: 11 (merkle_tree.py:128)
-[I 2025-09-29 09:29:13:921 tid=2496 MerkleTree.Memory] Level 13 rebuilt, size: 6 (merkle_tree.py:128)
-[I 2025-09-29 09:29:13:921 tid=2496 MerkleTree.Memory] Level 14 rebuilt, size: 3 (merkle_tree.py:128)
-[I 2025-09-29 09:29:13:922 tid=2496 MerkleTree.Memory] Level 15 rebuilt, size: 2 (merkle_tree.py:128)
-[I 2025-09-29 09:29:13:923 tid=2496 MerkleTree.Memory] Level 16 rebuilt, size: 1 (merkle_tree.py:128)
-[I 2025-09-29 09:29:13:924 tid=2496 MerkleTree.Memory] Level 17 rebuilt, size: 1 (merkle_tree.py:128)
-[I 2025-09-29 09:29:13:925 tid=2496 MerkleTree.Memory] Level 18 rebuilt, size: 1 (merkle_tree.py:128)
-[I 2025-09-29 09:29:13:926 tid=2496 MerkleTree.Memory] Level 19 rebuilt, size: 1 (merkle_tree.py:128)
-[I 2025-09-29 09:29:13:926 tid=2496 Tornado] Merkle tree ready (core.py:84)
-[I 2025-09-29 09:29:14:979 tid=12168 EventPoller] 5840 blocks behind, latest block number: 23465548 (blockchain.py:248)
-[I 2025-09-29 09:29:17:646 tid=12168 cli] Ethereum@100ETH, synced 5840 blocks from 23459709 to 23465548, progress: 100.00%, deposits: 16, withdrawals: 4 (cli.py:193)
-[I 2025-09-29 09:29:26:408 tid=12168 EventPoller] Synced to block 23465549 (blockchain.py:237)
-[I 2025-09-29 09:29:26:408 tid=12168 cli] Ethereum@100ETH, catch up to the latest blockchain (cli.py:188)
-[I 2025-09-29 09:29:31:281 tid=2496 Tornado] withdraw(to=0x1D7d988c91780135Ae5795512AC1497973CB7122), proof generated for commitment: 0x19a6418568ed894aed03547f6ff915269c64ece370202e57c600861424e175d7 (core.py:396)
-[I 2025-09-29 09:29:32:584 tid=2496 Tornado] withdraw(to=0x1D7d988c91780135Ae5795512AC1497973CB7122) succeed, tx hash: 0x0ac61cb93b89ec691647b9013dc55354116dcf3356564ee16fd7378133ebc66a (core.py:508)
+[I 2025-10-10 09:54:27:646 tid=44584 Tornado] Rebuilding merkle tree from database, please wait... (core.py:76)
+[I 2025-10-10 09:54:27:873 tid=44584 MerkleTree.Memory] Level 0 rebuilt, size: 730 (merkle_tree.py:128)
+[I 2025-10-10 09:54:27:982 tid=44584 MerkleTree.Memory] Level 1 rebuilt, size: 365 (merkle_tree.py:128)
+[I 2025-10-10 09:54:28:036 tid=44584 MerkleTree.Memory] Level 2 rebuilt, size: 183 (merkle_tree.py:128)
+[I 2025-10-10 09:54:28:063 tid=44584 MerkleTree.Memory] Level 3 rebuilt, size: 92 (merkle_tree.py:128)
+[I 2025-10-10 09:54:28:076 tid=44584 MerkleTree.Memory] Level 4 rebuilt, size: 46 (merkle_tree.py:128)
+[I 2025-10-10 09:54:28:084 tid=44584 MerkleTree.Memory] Level 5 rebuilt, size: 23 (merkle_tree.py:128)
+[I 2025-10-10 09:54:28:088 tid=44584 MerkleTree.Memory] Level 6 rebuilt, size: 12 (merkle_tree.py:128)
+[I 2025-10-10 09:54:28:089 tid=44584 MerkleTree.Memory] Level 7 rebuilt, size: 6 (merkle_tree.py:128)
+[I 2025-10-10 09:54:28:091 tid=44584 MerkleTree.Memory] Level 8 rebuilt, size: 3 (merkle_tree.py:128)
+[I 2025-10-10 09:54:28:091 tid=44584 MerkleTree.Memory] Level 9 rebuilt, size: 2 (merkle_tree.py:128)
+[I 2025-10-10 09:54:28:092 tid=44584 MerkleTree.Memory] Level 10 rebuilt, size: 1 (merkle_tree.py:128)
+[I 2025-10-10 09:54:28:093 tid=44584 MerkleTree.Memory] Level 11 rebuilt, size: 1 (merkle_tree.py:128)
+[I 2025-10-10 09:54:28:094 tid=44584 MerkleTree.Memory] Level 12 rebuilt, size: 1 (merkle_tree.py:128)
+[I 2025-10-10 09:54:28:094 tid=44584 MerkleTree.Memory] Level 13 rebuilt, size: 1 (merkle_tree.py:128)
+[I 2025-10-10 09:54:28:095 tid=44584 MerkleTree.Memory] Level 14 rebuilt, size: 1 (merkle_tree.py:128)
+[I 2025-10-10 09:54:28:096 tid=44584 MerkleTree.Memory] Level 15 rebuilt, size: 1 (merkle_tree.py:128)
+[I 2025-10-10 09:54:28:096 tid=44584 MerkleTree.Memory] Level 16 rebuilt, size: 1 (merkle_tree.py:128)
+[I 2025-10-10 09:54:28:097 tid=44584 MerkleTree.Memory] Level 17 rebuilt, size: 1 (merkle_tree.py:128)
+[I 2025-10-10 09:54:28:097 tid=44584 MerkleTree.Memory] Level 18 rebuilt, size: 1 (merkle_tree.py:128)
+[I 2025-10-10 09:54:28:098 tid=44584 MerkleTree.Memory] Level 19 rebuilt, size: 1 (merkle_tree.py:128)
+[I 2025-10-10 09:54:28:098 tid=44584 Tornado] Merkle tree ready (core.py:83)
+[I 2025-10-10 09:54:28:608 tid=30988 EventPoller] 133 blocks behind, latest block number: 9379475 (blockchain.py:238)
+[I 2025-10-10 09:54:30:615 tid=30988 cli] Sepolia@0.1ETH, synced 133 blocks from 9379343 to 9379475, progress: 100.00%, deposits: 1, withdrawals: 1 (cli.py:267)
+[I 2025-10-10 09:54:30:615 tid=30988 EventPoller] Synced to block 9379475 (blockchain.py:317)
+[I 2025-10-10 09:54:30:615 tid=30988 cli] Sepolia@0.1ETH, catch up to the latest blockchain (cli.py:258)
+[I 2025-10-10 09:54:36:408 tid=44584 Tornado] withdraw(to=0xA09CBdDb54c7bD239F80b252d25002001580BafF), proof generated for commitment: 0x122ec0ef7098492ae61f26695edd4c070ca40ca6b1455ff64843f53ad03780cb (core.py:420)
+[I 2025-10-10 09:54:38:586 tid=44584 Tornado] withdraw(to=0xA09CBdDb54c7bD239F80b252d25002001580BafF) succeed, tx hash: 0x71fde15c7ff5e84886f664ab5dcf78b9d0a6b607c8d6c52ad37749ec9287bc0b (core.py:532)
 ```
 
 Somtimes with a relayer, you need to increase the service fee rate in `config.py`, the default is `1.8%`

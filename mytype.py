@@ -189,6 +189,29 @@ class Note(object):
         secret   : bytearray   = bytearray.fromhex(parts[4]).rjust(31, b'\x00')
         return chain, symbol, unit, Note(nullifier, secret)
 
+    @staticmethod
+    def to_invoice(chain: ChainID, symbol: Symbol, unit: TornadoUnit, note: 'Note') -> str:
+        return (f'{chain_to_string(chain)}-'
+                f'{symbol.value}-'
+                f'{unit.value}-'
+                f'{note.commitment.hex().zfill(64)}')
+
+    @staticmethod
+    def from_invoice(invoice: str) -> Union[tuple[ChainID, Symbol, TornadoUnit, HexBytes], None]:
+        parts = invoice.split('-')
+        if len(parts) != 4:
+            return None
+        try:
+            chain     : ChainID     = string_to_chain(parts[0])
+            symbol    : Symbol      = Symbol(parts[1].lower())
+            unit      : TornadoUnit = TornadoUnit(parts[2])
+            commitment: bytearray   = bytearray.fromhex(parts[3])
+            if len(commitment) != 32:
+                return None
+        except ValueError:
+            return None
+        return chain, symbol, unit, HexBytes(commitment)
+
 
 class MerkleProof(object):
 

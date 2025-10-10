@@ -175,10 +175,10 @@ class Tornado(EventPoller.Handler):
         return result
 
     # Deposit
-    # @param    note    A fresh unused private note
-    # @param    key     The private key to make the deposit
+    # @param    commitment  The commitment of the note to deposit
+    # @param    key         The private key to make the deposit
     # @return   HexBytes of transaction hash on success, None if failed
-    def deposit(self, note: Note, key: Key) -> HexBytes | None:
+    def deposit(self, commitment: HexBytes, key: Key) -> HexBytes | None:
         # Create RPC client
         url: str = config.RPC_URLS[self.chain]
         if url.startswith('http'):
@@ -197,11 +197,11 @@ class Tornado(EventPoller.Handler):
             w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
 
         # Check if the note has already been deposited
-        deposited: bool | None = self.note_deposited(note.commitment, w3)
+        deposited: bool | None = self.note_deposited(commitment, w3)
         if deposited is None:
             return None
         elif deposited:
-            log.error(self.tag, f'deposit(from={key.eth_address()}), note commitment already deposited: {note.commitment.to_0x_hex()}')
+            log.error(self.tag, f'deposit(from={key.eth_address()}), note commitment already deposited: {commitment.to_0x_hex()}')
             return None
         wait(Second(0.5))  # Prevent RPC rate limit
 
@@ -254,7 +254,7 @@ class Tornado(EventPoller.Handler):
             proxy_abi: str = f.read()
         try:
             contract: Contract = w3.eth.contract(address=self.proxy_address, abi=proxy_abi)
-            call = contract.functions.deposit(self.deployment_address, note.commitment, b'')
+            call = contract.functions.deposit(self.deployment_address, commitment, b'')
             tx: TxParams = {
                 'from'   : key.eth_address(),
                 'chainId': self.chain.value,
