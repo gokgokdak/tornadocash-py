@@ -466,7 +466,7 @@ class Tornado(EventPoller.Handler):
                 except BaseException as e:
                     log.error(self.tag, f'withdraw(to={recipient}), failed to parse relayer job response to JSON, exception: {e}, response: {resp}')
                     return None
-                if result['status'] == 'CONFIRMED':
+                if result['status'] == 'MINED' or result['status'] == 'CONFIRMED':
                     try:
                         relayer_tx_hash: str = result['txHash']
                         log.info(self.tag, f'Withdraw {self.unit} {self.symbol.value.upper()} succeed, tx hash: {relayer_tx_hash}')
