@@ -85,11 +85,11 @@ def get_option() -> tuple[str, argparse.Namespace] | None:
         '--withdraw',
         required=False,
         nargs=3,
-        metavar=("<note>", "<recipient>", "<key>"),
+        metavar=("<note>", "<recipient>", "<key/relayer_url>"),
         help="Make a withdrawal\n"
-             "<note>     : Tornado note text created by deposit\n"
-             "<recipient>: Recipient address\n"
-             "<key>      : Private key in Hex string, '0x' prefix is optional\n"
+             "<note>           : Tornado note text created by deposit\n"
+             "<recipient>      : Recipient address\n"
+             "<key/relayer_url>: Relayer URL or private key in Hex string, '0x' prefix is optional\n"
     )
     parser.add_argument(
         '--create_note',
@@ -106,21 +106,21 @@ def get_option() -> tuple[str, argparse.Namespace] | None:
         required=False,
         metavar="<note>",
         help="Check if the note has been deposited\n"
-             "<note>: Tornado note text created by deposit"
+             "<note>: Tornado note text"
     )
     parser.add_argument(
         '--note_withdrawn',
         required=False,
         metavar="<note>",
         help="Check if the note has been withdrawn\n"
-             "<note>: Tornado note text created by deposit"
+             "<note>: Tornado note text"
     )
     parser.add_argument(
         '--note_detail',
         required=False,
         metavar="<note>",
         help="Print nullifier hash and commitment of the note\n"
-             "<note>: Tornado note text created by deposit"
+             "<note>: Tornado note text"
     )
     args = parser.parse_args()
 
