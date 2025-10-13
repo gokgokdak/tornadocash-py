@@ -163,7 +163,7 @@ class EventPoller(object):
         self.current    : int                       = 0
         self.cond       : threading.Condition       = threading.Condition()
         self.worker     : threading.Thread | None   = None
-        self.handers    : list[EventPoller.Handler] = []
+        self.handlers    : list[EventPoller.Handler] = []
         if self.connection is None:
             self.connection = rpc.Connection(self.chain, config.RPC_URLS[self.chain])
 
@@ -212,11 +212,11 @@ class EventPoller(object):
 
     def add_handler(self, handler: Handler) -> None:
         with self.cond:
-            self.handers.append(handler)
+            self.handlers.append(handler)
 
     def remove_all_handlers(self) -> None:
         with self.cond:
-            self.handers.clear()
+            self.handlers.clear()
 
     def _loop(self) -> None:
         first_loop: bool = True
@@ -235,7 +235,7 @@ class EventPoller(object):
             count_block = latest - self.current + 1
 
             # Notify latest block number
-            for h in self.handers:
+            for h in self.handlers:
                 h.on_latest_block(latest)
             # Log how many blocks behind
             if first_loop:
@@ -302,19 +302,19 @@ class EventPoller(object):
                                     f'contract {self.contract}, deposit: {count_deposit}, withdraw: {count_withdraw}')
 
                 # Callback and update
-                for h in self.handers:
+                for h in self.handlers:
                     h.on_sync(chunk[0], chunk[1], deposits, withdrawals)
             # Update current block number
             if not break_early:
                 self.current = latest + 1
                 # Notify latest block number
-                for h in self.handers:
+                for h in self.handlers:
                     h.on_latest_block(latest)
                 # Notify first catchup
                 if first_loop:
                     first_loop = False
                     log.info(self.tag, f'Synced to block {latest}')
-                    for h in self.handers:
+                    for h in self.handlers:
                         h.on_first_catchup()
                 # Sleep interval if no new block
                 util.wait(config.BLOCKCHAIN_LOG_EVENT_POLL_INTERVAL_SEC, self.cond)
