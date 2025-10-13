@@ -6,13 +6,13 @@ from hexbytes import HexBytes
 from requests import Response
 from web3 import Web3
 from web3.contract import Contract
-from web3.middleware import ExtraDataToPOAMiddleware
-from web3.types import Wei, TxParams
+from web3.types import Nonce, Wei, TxParams
 
 import config
 import database
 import log
 import merkle_tree
+import rpc
 import util
 import zk
 from blockchain import EventPoller, EventDeposit, EventWithdraw
@@ -36,22 +36,46 @@ class Tornado(EventPoller.Handler):
             """Called when the latest block number is updated."""
             pass
 
-    def __init__(self, chain: ChainID, symbol: Symbol, unit: TornadoUnit):
+    def __init__(self, chain: ChainID, symbol: Symbol, unit: TornadoUnit, connection: rpc.Interface | None = None):
         self.tag                : str                           = f'{__class__.__name__}'
         self.chain              : ChainID                       = chain
         self.symbol             : Symbol                        = symbol
         self.unit               : TornadoUnit                   = unit
+        self.connection         : rpc.Interface | None          = connection
+        self.external           : bool                          = connection is not None  # If True, the RPC connection is managed outside
         self.initialized        : bool                          = False
         self.sync_only          : bool                          = False  # If True, only sync events without rebuilding the merkle tree, 'withdraw()' will not be available
         self.db                 : database.Interface            = database.create(database.Backend.SQLITE)
         self.meta               : Metadata                      = util.load_metadata()[chain]
         self.proxy_address      : ChecksumAddress               = self.meta.proxy_address
         self.deployment_address : ChecksumAddress               = self.meta.deployment[self.symbol][self.unit][0]
+        self.proxy_contract     : Contract | rpc.Error | None   = None
+        self.deployment_contract: Contract | rpc.Error | None   = None
+        self.token_contract     : Contract | rpc.Error | None   = None
         self.poller             : EventPoller                   = EventPoller(chain)
         self.tree               : merkle_tree.Interface | None  = None
         self.zksnark            : zk.circuit.Interface          = zk.circuit.create(zk.circuit.ImplType.JAVASCRIPT)
         self.mutex              : threading.Lock                = threading.Lock()
         self.handlers           : list[Tornado.Handler]         = []
+        with open(config.TORNADO_PROXY_ABI_PATH, 'r') as f:
+            proxy_abi: str = f.read()
+        with open(config.TORNADO_ABI_PATH, 'r') as f:
+            deployment_abi: str = f.read()
+        with open(config.ERC20_ABI_PATH, 'r') as f:
+            erc20_abi: str = f.read()
+        if self.connection is None:
+            self.connection = rpc.Connection(self.chain, config.RPC_URLS[self.chain])
+            if not self.connection.start():
+                raise RuntimeError(f'Failed to start RPC connection for {self.chain}')
+        self.proxy_contract      = self.connection.get_contract(address=self.proxy_address, abi=proxy_abi)
+        self.deployment_contract = self.connection.get_contract(self.deployment_address, deployment_abi)
+        self.token_contract      = self.connection.get_contract(self.meta.token_address[self.symbol], erc20_abi) if SymbolType.ERC20 == get_symbol_type(self.symbol) else None
+        if rpc.IsError(self.proxy_contract):
+            raise RuntimeError(f'Failed to get proxy contract instance: {self.proxy_contract.msg}')
+        if rpc.IsError(self.deployment_contract):
+            raise RuntimeError(f'Failed to get deployment contract instance: {self.deployment_contract.msg}')
+        if rpc.IsError(self.token_contract):
+            raise RuntimeError(f'Failed to get token contract instance: {self.deployment_contract.msg}')
 
     '''
     Initialize Tornado instance
@@ -60,6 +84,14 @@ class Tornado(EventPoller.Handler):
     def init(self, sync_only: bool) -> bool:
         if self.initialized:
             log.warn(self.tag, 'init() already initialized')
+            return False
+        # Start RPC connection
+        if not self.external:
+            if not self.connection.start():
+                log.error(self.tag, f'Failed to start RPC connection for {self.chain}')
+                return False
+        elif not self.connection.started():
+            log.error(self.tag, 'The external RPC connection is not started')
             return False
         # Open database
         if not self.db.open(self.chain, self.symbol, self.unit):
@@ -97,6 +129,9 @@ class Tornado(EventPoller.Handler):
             self.poller.stop()
         self.poller.remove_all_handlers()
         self.db.close()
+        if not self.external:
+            if self.connection.started():
+                self.connection.stop()
         self.tree = None
         self.sync_only = False
         log.debug(self.tag, 'un_init() done')
@@ -117,26 +152,10 @@ class Tornado(EventPoller.Handler):
     # @return   True : The corresponding note has been deposited
     #           False: The corresponding note has not been used
     #           None : Failed to query the blockchain, e.g. RPC connection error
-    def note_deposited(self, commitment: HexBytes, w3: Web3 | None = None) -> bool | None:
-        # Create RPC client
-        if w3 is None:
-            url: str = config.RPC_URLS[self.chain]
-            if url.startswith('http'):
-                w3: Web3 = Web3(Web3.HTTPProvider(url))
-            elif url.startswith('ws'):
-                w3: Web3 = Web3(Web3.LegacyWebSocketProvider(url))
-            else:
-                log.error(self.tag, f'note_deposited(), unsupported RPC url: {url}')
-                return None
-            if not w3.is_connected():
-                log.error(self.tag, f'note_deposited(), failed to connect to RPC: {url}')
-                return None
+    def note_deposited(self, commitment: HexBytes) -> bool | None:
         # Call contract function
-        with open(config.TORNADO_ABI_PATH, 'r') as f:
-            abi: str = f.read()
         try:
-            contract: Contract = w3.eth.contract(address=self.deployment_address, abi=abi)
-            function = contract.functions.commitments(commitment)
+            function = self.deployment_contract.functions.commitments(commitment)
             result: bool = function.call()
         except BaseException as e:
             log.error(self.tag, f'note_deposited(), failed to call contract function commitments(bytes32): {e}')
@@ -148,26 +167,9 @@ class Tornado(EventPoller.Handler):
     # @return   True : The corresponding note has been withdrawn
     #           False: The corresponding note has not been used
     #           None : Failed to query the blockchain, e.g. RPC connection error
-    def note_withdrawn(self, nullifier_hash: HexBytes, w3: Web3 | None = None) -> bool | None:
-        # Create RPC client
-        if w3 is None:
-            url: str = config.RPC_URLS[self.chain]
-            if url.startswith('http'):
-                w3: Web3 = Web3(Web3.HTTPProvider(url))
-            elif url.startswith('ws'):
-                w3: Web3 = Web3(Web3.LegacyWebSocketProvider(url))
-            else:
-                log.error(self.tag, f'note_withdrawn(), unsupported RPC url: {url}')
-                return None
-            if not w3.is_connected():
-                log.error(self.tag, f'note_withdrawn(), failed to connect to RPC: {url}')
-                return None
-        # Call contract function
-        with open(config.TORNADO_ABI_PATH, 'r') as f:
-            abi: str = f.read()
+    def note_withdrawn(self, nullifier_hash: HexBytes) -> bool | None:
         try:
-            contract: Contract = w3.eth.contract(address=self.deployment_address, abi=abi)
-            function = contract.functions.nullifierHashes(nullifier_hash)
+            function = self.deployment_contract.functions.nullifierHashes(nullifier_hash)
             result: bool = function.call()
         except BaseException as e:
             log.error(self.tag, f'note_withdrawn(), failed to call contract function nullifierHashes(bytes32): {e}')
@@ -179,25 +181,8 @@ class Tornado(EventPoller.Handler):
     # @param    key         The private key to make the deposit
     # @return   HexBytes of transaction hash on success, None if failed
     def deposit(self, commitment: HexBytes, key: Key) -> HexBytes | None:
-        # Create RPC client
-        url: str = config.RPC_URLS[self.chain]
-        if url.startswith('http'):
-            w3: Web3 = Web3(Web3.HTTPProvider(url))
-        elif url.startswith('ws'):
-            w3: Web3 = Web3(Web3.LegacyWebSocketProvider(url))
-        else:
-            log.error(self.tag, f'deposit(from={key.eth_address()}), unsupported RPC url: {url}')
-            return None
-        if not w3.is_connected():
-            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to connect to RPC: {url}')
-            return None
-
-        # Polygon requires the POA middleware
-        if self.chain == ChainID.POLYGON:
-            w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
-
         # Check if the note has already been deposited
-        deposited: bool | None = self.note_deposited(commitment, w3)
+        deposited: bool | None = self.note_deposited(commitment)
         if deposited is None:
             return None
         elif deposited:
@@ -205,15 +190,18 @@ class Tornado(EventPoller.Handler):
             return None
         wait(Second(0.5))  # Prevent RPC rate limit
 
+        # Get nonce
+        nonce: Nonce | rpc.Error = self.connection.nonce(key.eth_address())
+        if rpc.IsError(nonce):
+            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to get nonce: {nonce.msg}')
+            return None
+
         # Allowance for ERC20 token
         if SymbolType.ERC20 == get_symbol_type(self.symbol):
             need_increase: bool = True
-            with open(config.ERC20_ABI_PATH, 'r') as f:
-                erc20_abi: str = f.read()
             # Check allowance
             try:
-                contract: Contract = w3.eth.contract(address=self.meta.token_address[self.symbol], abi=erc20_abi)
-                function = contract.functions.allowance(key.eth_address(), self.proxy_address)
+                function = self.token_contract.functions.allowance(key.eth_address(), self.proxy_address)
                 result: int = function.call()
                 if result >= unit_to_wei(self.unit, self.meta.decimals[self.symbol]):
                     need_increase = False
@@ -222,25 +210,34 @@ class Tornado(EventPoller.Handler):
                 return None
             # Increase allowance
             if need_increase:
+                # Call contract approve() to build transaction
                 try:
-                    contract: Contract = w3.eth.contract(address=self.meta.token_address[self.symbol], abi=erc20_abi)
-                    call = contract.functions.approve(self.proxy_address, unit_to_wei(self.unit, self.meta.decimals[self.symbol]))
+                    call = self.token_contract.functions.approve(self.proxy_address, unit_to_wei(self.unit, self.meta.decimals[self.symbol]))
                     tx: TxParams = {
                         'from'   : key.eth_address(),
                         'chainId': self.chain.value,
-                        'nonce'  : w3.eth.get_transaction_count(key.eth_address()),
+                        'nonce'  : Nonce(nonce),
                     }
                     tx = call.build_transaction(tx)
-                    signed: SignedTransaction = w3.eth.account.sign_transaction(tx, key.private())
-                    w3.eth.send_raw_transaction(signed.raw_transaction)
                 except BaseException as e:
-                    log.error(self.tag, f'deposit(from={key.eth_address()}), failed to increase allowance: {e}')
+                    log.error(self.tag, f'deposit(from={key.eth_address()}), failed to call contract function approve(address,uint256): {e}')
                     return None
+                # Sign
+                signed_tx: SignedTransaction | rpc.Error = self.connection.sign_transaction(tx, key)
+                if rpc.IsError(signed_tx):
+                    log.error(self.tag, f'deposit(from={key.eth_address()}), failed to sign transaction: {signed_tx.msg}')
+                    return None
+                # Send
+                tx_hash: HexBytes | rpc.Error = self.connection.send_transaction(signed_tx)
+                if rpc.IsError(tx_hash):
+                    log.error(self.tag, f'deposit(from={key.eth_address()}), failed to send transaction: {tx_hash.msg}')
+                    return None
+                # Increase nonce
+                nonce += 1
                 # Wait for the allowance to be updated
                 while True:
                     try:
-                        contract: Contract = w3.eth.contract(address=self.meta.token_address[self.symbol], abi=erc20_abi)
-                        function = contract.functions.allowance(key.eth_address(), self.proxy_address)
+                        function = self.token_contract.functions.allowance(key.eth_address(), self.proxy_address)
                         result: int = function.call()
                         if result >= unit_to_wei(self.unit, self.meta.decimals[self.symbol]):
                             break
@@ -249,24 +246,29 @@ class Tornado(EventPoller.Handler):
                         return None
                     wait(Second(1))
 
-        # Make deposit
-        with open(config.TORNADO_PROXY_ABI_PATH, 'r') as f:
-            proxy_abi: str = f.read()
+        # Call contract deposit() to build transaction
         try:
-            contract: Contract = w3.eth.contract(address=self.proxy_address, abi=proxy_abi)
-            call = contract.functions.deposit(self.deployment_address, commitment, b'')
+            call = self.proxy_contract.functions.deposit(self.deployment_address, commitment, b'')
             tx: TxParams = {
                 'from'   : key.eth_address(),
                 'chainId': self.chain.value,
-                'nonce'  : w3.eth.get_transaction_count(key.eth_address()),
+                'nonce'  : Nonce(nonce),
             }
             if SymbolType.NATIVE == get_symbol_type(self.symbol):
                 tx['value'] = unit_to_wei(self.unit, self.meta.decimals[self.symbol])
             tx = call.build_transaction(tx)
-            signed: SignedTransaction = w3.eth.account.sign_transaction(tx, key.private())
-            tx_hash: HexBytes = w3.eth.send_raw_transaction(signed.raw_transaction)
         except BaseException as e:
             log.error(self.tag, f'deposit(from={key.eth_address()}), failed to deposit: {e}')
+            return None
+        # Sign
+        signed_tx: SignedTransaction | rpc.Error = self.connection.sign_transaction(tx, key)
+        if rpc.IsError(signed_tx):
+            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to sign transaction: {signed_tx.msg}')
+            return None
+        # Send
+        tx_hash: HexBytes | rpc.Error = self.connection.send_transaction(signed_tx)
+        if rpc.IsError(tx_hash):
+            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to send transaction: {tx_hash.msg}')
             return None
         log.info(self.tag, f'deposit(from={key.eth_address()}) succeed, tx hash: {tx_hash.hex()}')
         return tx_hash
@@ -293,25 +295,8 @@ class Tornado(EventPoller.Handler):
         use_relayer: bool = relayer_url is not None and relayer_url.startswith('http')
         total_wei  : Wei  = unit_to_wei(self.unit, self.meta.decimals[self.symbol])
 
-        # Create RPC client
-        url: str = config.RPC_URLS[self.chain]
-        if url.startswith('http'):
-            w3: Web3 = Web3(Web3.HTTPProvider(url))
-        elif url.startswith('ws'):
-            w3: Web3 = Web3(Web3.LegacyWebSocketProvider(url))
-        else:
-            log.error(self.tag, f'withdraw(to={recipient}), unsupported RPC url: {url}')
-            return None
-        if not w3.is_connected():
-            log.error(self.tag, f'withdraw(to={recipient}), failed to connect to RPC: {url}')
-            return None
-
-        # Polygon requires the POA middleware
-        if self.chain == ChainID.POLYGON:
-            w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
-
         # Check if the note has already been withdrawn
-        withdrawn: bool | None = self.note_withdrawn(note.nullifier_hash, w3)
+        withdrawn: bool | None = self.note_withdrawn(note.nullifier_hash)
         if withdrawn is None:
             return None
         elif withdrawn:
@@ -370,10 +355,9 @@ class Tornado(EventPoller.Handler):
             fee_percent   : Wei = Wei(
                 (total_wei * int(float(config.RELAYER_FEE_RATE) * round_decimal)) // (round_decimal * 100)
             )
-            try:
-                gas_price: Wei = w3.eth.gas_price
-            except BaseException as e:
-                log.error(self.tag, f'withdraw(to={recipient}), failed to get gas price from RPC: {e}')
+            gas_price: Wei | rpc.Error = self.connection.gas_price()
+            if rpc.IsError(gas_price):
+                log.error(self.tag, f'withdraw(to={recipient}), failed to get gas price: {gas_price.msg}')
                 return None
             expense: Wei = Wei(gas_price * 500_000)
             if get_symbol_type(self.symbol) == SymbolType.NATIVE:
@@ -504,11 +488,12 @@ class Tornado(EventPoller.Handler):
             return recursive_query()
 
         # Make withdrawal directly
-        with open(config.TORNADO_PROXY_ABI_PATH, 'r') as f:
-            proxy_abi: str = f.read()
+        nonce: Nonce | rpc.Error = self.connection.nonce(key.eth_address())
+        if rpc.IsError(nonce):
+            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to get nonce: {nonce.msg}')
+            return None
         try:
-            contract: Contract = w3.eth.contract(address=self.proxy_address, abi=proxy_abi)
-            call = contract.functions.withdraw(
+            call = self.proxy_contract.functions.withdraw(
                 self.deployment_address,
                 HexBytes.fromhex(proof['solidity']['proof'][2:] if proof['solidity']['proof'].startswith('0x') else proof['solidity']['proof']),
                 merkle_proof.root,
@@ -521,13 +506,21 @@ class Tornado(EventPoller.Handler):
             tx: TxParams = {
                 'from'   : key.eth_address(),
                 'chainId': self.chain.value,
-                'nonce'  : w3.eth.get_transaction_count(key.eth_address()),
+                'nonce'  : Nonce(nonce),
             }
             tx = call.build_transaction(tx)
-            signed: SignedTransaction = w3.eth.account.sign_transaction(tx, key.private())
-            tx_hash: HexBytes = w3.eth.send_raw_transaction(signed.raw_transaction)
         except BaseException as e:
             log.error(self.tag, f'withdraw(to={recipient}), failed to deposit: {e}')
+            return None
+        # Sign
+        signed_tx: SignedTransaction | rpc.Error = self.connection.sign_transaction(tx, key)
+        if rpc.IsError(signed_tx):
+            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to sign transaction: {signed_tx.msg}')
+            return None
+        # Send
+        tx_hash: HexBytes | rpc.Error = self.connection.send_transaction(signed_tx)
+        if rpc.IsError(tx_hash):
+            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to send transaction: {tx_hash.msg}')
             return None
         log.info(self.tag, f'withdraw(to={recipient}) succeed, tx hash: {tx_hash.to_0x_hex()}')
         return tx_hash

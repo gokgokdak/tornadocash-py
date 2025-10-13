@@ -5,8 +5,9 @@ from hexbytes import HexBytes
 from web3 import Web3
 from web3.types import LogReceipt, Wei
 
-import log
 import config
+import log
+import rpc
 import util
 from mytype import ChainID
 
@@ -150,11 +151,12 @@ class EventPoller(object):
             """Called when the latest block number is updated."""
             pass
 
-    def __init__(self, chain: ChainID):
+    def __init__(self, chain: ChainID, connection: rpc.Interface | None = None) -> None:
         self.tag        : str                       = f'{__class__.__name__}'
         self.off        : bool                      = True
         self.chain      : ChainID                   = chain
-        self.w3         : Web3 | None               = None
+        self.connection : rpc.Interface | None      = connection  # If True, the RPC connection is managed outside
+        self.external   : bool                      = connection is not None
         self.meta       : util.Metadata             = util.load_metadata()[chain]
         self.contract   : ChecksumAddress | None    = None
         self.events     : list[LogEvent]            = [EventDeposit(), EventWithdraw()]
@@ -162,6 +164,8 @@ class EventPoller(object):
         self.cond       : threading.Condition       = threading.Condition()
         self.worker     : threading.Thread | None   = None
         self.handers    : list[EventPoller.Handler] = []
+        if self.connection is None:
+            self.connection = rpc.Connection(self.chain, config.RPC_URLS[self.chain])
 
     '''
     Start polling
@@ -172,13 +176,12 @@ class EventPoller(object):
         if not self.off:
             log.warn(self.tag, 'start() already started')
             return False
-        url: str = config.RPC_URLS[self.chain]
-        if url.startswith('http'):
-            self.w3 = Web3(Web3.HTTPProvider(url))
-        elif url.startswith('ws'):
-            self.w3 = Web3(Web3.LegacyWebSocketProvider(url))
-        else:
-            log.error(self.tag, f'Unsupported RPC url: {url}')
+        if not self.external:
+            if not self.connection.start():
+                log.error(self.tag, f'Failed to start RPC connection for {self.chain}')
+                return False
+        elif not self.connection.started():
+            log.error(self.tag, 'The external RPC connection is not started')
             return False
         self.off      = False
         self.contract = contract
@@ -197,9 +200,11 @@ class EventPoller(object):
         with self.cond:
             self.cond.notify_all()
         self.worker.join()
-        self.worker   = None
-        self.contract = None
-        self.w3       = None
+        if not self.external:
+            if self.connection.started():
+                self.connection.stop()
+        self.worker     = None
+        self.contract   = None
         log.debug(self.tag, 'stop() done')
 
     def is_started(self) -> bool:
@@ -216,18 +221,17 @@ class EventPoller(object):
     def _loop(self) -> None:
         first_loop: bool = True
         while not self.off:
-            latest     : int = 0
-            count_block: int = 0
+            latest     : int | rpc.Error = self.connection.latest_block_number()
+            count_block: int             = 0
 
             # Get latest block number
-            while latest <= 0 and not self.off:
-                try:
-                    latest = self.w3.eth.block_number
-                except Exception as e:
-                    log.error(self.tag, f'Failed to get latest block number, error: {e}')
-                    log.info(self.tag, f'Wait {config.RPC_RETRY_INTERVAL_SEC}s and retry')
-                    util.wait(config.RPC_RETRY_INTERVAL_SEC, self.cond)
-                    continue
+            while not self.off:
+                if not rpc.IsError(latest):
+                    break
+                latest = self.connection.latest_block_number()
+                log.error(self.tag, f'Failed to get latest block number, error: {latest.msg}')
+                log.info(self.tag, f'Wait {config.RPC_RETRY_INTERVAL_SEC}s and retry')
+                util.wait(config.RPC_RETRY_INTERVAL_SEC, self.cond)
             count_block = latest - self.current + 1
 
             # Notify latest block number
@@ -258,19 +262,14 @@ class EventPoller(object):
                 # Get event logs
                 event_logs: list[LogReceipt] = []
                 for expected in self.events:
-                    result: list[LogReceipt] | None = None
-                    while result is None and not self.off:
-                        try:
-                            result = self.w3.eth.get_logs({
-                                'address'  : ChecksumAddress(self.contract),
-                                'fromBlock': chunk[0],
-                                'toBlock'  : chunk[1],
-                                'topics'   : [expected.event_hash()],
-                            })
-                        except Exception as e:
-                            log.error(self.tag, f'Failed to get logs for event {expected.event_hash().to_0x_hex()}, error: {e}')
-                            log.info(self.tag, f'Wait {config.RPC_RETRY_INTERVAL_SEC}s and retry')
-                            util.wait(config.RPC_RETRY_INTERVAL_SEC, self.cond)
+                    result: list[LogReceipt] | rpc.Error = self.connection.log_receipt(ChecksumAddress(self.contract), chunk[0], chunk[1], [expected.event_hash()])
+                    while not self.off:
+                        if not rpc.IsError(result):
+                            break
+                        log.error(self.tag, f'Failed to get logs for event {expected.event_hash().to_0x_hex()}, error: {result.msg}')
+                        log.info(self.tag, f'Wait {config.RPC_RETRY_INTERVAL_SEC}s and retry')
+                        util.wait(config.RPC_RETRY_INTERVAL_SEC, self.cond)
+                        result = self.connection.log_receipt(ChecksumAddress(self.contract), chunk[0], chunk[1], [expected.event_hash()])
                     event_logs.extend(result if result is not None else [])
                     util.wait(config.RPC_RETRY_INTERVAL_SEC, self.cond)
 

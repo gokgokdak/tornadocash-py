@@ -11,6 +11,7 @@ from web3.types import TxReceipt
 
 import config
 import log
+import rpc
 import util
 from blockchain import EventDeposit, EventWithdraw
 from core import Tornado
@@ -424,19 +425,19 @@ def deposit_batch(key: Key, batch: str) -> None:
             chain: ChainID = string_to_chain(chain_str)
             if chain in parsed:
                 log.error(tag, f'Duplicated key "{chain_str}" in the batch')
-                return
+                return None
             parsed[chain] = {}
             for symbol_str, v1 in v0.items():
                 symbol: Symbol = Symbol(symbol_str.lower())
                 if symbol in parsed[chain]:
                     log.error(tag, f'Duplicated key "{symbol_str}" in the batch')
-                    return
+                    return None
                 parsed[chain][symbol] = {}
                 for unit_str, count in v1.items():
                     unit: TornadoUnit = TornadoUnit(unit_str)
                     if unit in parsed[chain][symbol]:
                         log.error(tag, f'Duplicated key "{unit_str}" in the batch')
-                        return
+                        return None
                     parsed[chain][symbol][unit] = int(count)
     except Exception as e:
         stack: str = traceback.format_exc()
@@ -444,23 +445,22 @@ def deposit_batch(key: Key, batch: str) -> None:
         lines: list[str] = [f'deposit_batch() raised {type(e)} exception: {text}']
         lines.extend(stack.split('\n'))
         log.error(tag, lines)
-        return
+        return None
+    # Create and start RPC connections
+    connections: dict[ChainID, rpc.Interface] = {}
+    for chain in parsed.keys():
+        if chain not in config.RPC_URLS:
+            log.error(tag, f'No RPC URL configured for chain: {chain_to_string(chain)}')
+            return None
+        connections[chain] = rpc.Connection(chain, config.RPC_URLS[chain])
+        if not connections[chain].start():
+            log.error(tag, f'Failed to connect to RPC: {config.RPC_URLS[chain]}')
+            return None
     # Deposit
     for chain, v0 in parsed.items():
-        url: str = config.RPC_URLS[chain]
-        if url.startswith('http'):
-            w3: Web3 = Web3(Web3.HTTPProvider(url))
-        elif url.startswith('ws'):
-            w3: Web3 = Web3(Web3.LegacyWebSocketProvider(url))
-        else:
-            log.error(tag, f'unsupported RPC url: {url}')
-            return None
-        if not w3.is_connected():
-            log.error(tag, f'failed to connect to RPC: {url}')
-            return None
         for symbol, v1 in v0.items():
             for unit, count in v1.items():
-                tornado: Tornado = Tornado(chain, symbol, unit)
+                tornado: Tornado = Tornado(chain, symbol, unit, connections[chain])
                 if not tornado.init(sync_only=False):
                     continue
                 for _ in range(count):
@@ -473,20 +473,24 @@ def deposit_batch(key: Key, batch: str) -> None:
                     # Wait until the deposit transaction is mined
                     if tx_hash is None:
                         continue
-                    util.wait(Second(10))
+                    log.info(tag, f'Wait 15 seconds for deposit transaction to be mined ...')
+                    util.wait(Second(15))
                     while True:
-                        try:
-                            receipt: TxReceipt = w3.eth.get_transaction_receipt(tx_hash)
-                            if receipt is not None and receipt['blockNumber'] is not None:
-                                log.info(tag, f'Deposit transaction mined in block {receipt["blockNumber"]}', log.Color.CYAN, log.Style.BOLD)
-                                break
-                        except Exception as e:
-                            log.error(tag, f'Waiting for deposit transaction to be mined, RPC response: \"{e}\"')
+                        receipt: TxReceipt | rpc.Error = connections[chain].transaction_receipt(tx_hash)
+                        if rpc.IsError(receipt):
+                            log.warn(tag, f'Wait 5 seconds for deposit transaction to be mined, RPC response: \"{receipt.msg}\"')
                             util.wait(Second(5))
                             continue
-                        log.warn(tag, f'Waiting for deposit transaction to be mined ...')
+                        if receipt is not None and receipt['blockNumber'] is not None:
+                            log.info(tag, f'Deposit transaction mined in block {receipt["blockNumber"]}, tx_hash: {tx_hash.to_0x_hex()}', log.Color.CYAN, log.Style.BOLD)
+                            break
+                        log.info(tag, f'Wait 5 seconds for deposit transaction to be mined ...')
                         util.wait(Second(5))
                 tornado.un_init()
+    # Stop RPC connections
+    for conn in connections.values():
+        conn.stop()
+    return None
 
 
 def withdraw(note_text: str, recipient: ChecksumAddress, key_or_relayer: Key | str) -> None:
