@@ -83,8 +83,8 @@ class Tornado(EventPoller.Handler):
     '''
     def init(self, sync_only: bool) -> bool:
         if self.initialized:
-            log.warn(self.tag, 'init() already initialized')
-            return False
+            log.debug(self.tag, 'init() already initialized')
+            return True
         # Start RPC connection
         if not self.external:
             if not self.connection.start():
@@ -119,9 +119,9 @@ class Tornado(EventPoller.Handler):
         log.debug(self.tag, f'init()')
         return True
 
-    def un_init(self):
+    def un_init(self) -> None:
         if not self.initialized:
-            log.warn(self.tag, 'un_init() already un-initialized')
+            log.debug(self.tag, 'un_init() already un-initialized')
             return
         log.debug(self.tag, 'un_init() shutting down')
         self.initialized = False
@@ -270,7 +270,7 @@ class Tornado(EventPoller.Handler):
         if rpc.IsError(tx_hash):
             log.error(self.tag, f'deposit(from={key.eth_address()}), failed to send transaction: {tx_hash.msg}')
             return None
-        log.info(self.tag, f'deposit(from={key.eth_address()}) succeed, tx hash: {tx_hash.hex()}')
+        log.info(self.tag, f'Deposit {self.unit} {self.symbol.value.upper()} succeed, tx hash: {tx_hash.hex()}', log.Color.CYAN, log.Style.BOLD)
         return tx_hash
 
     # Withdraw
@@ -401,7 +401,7 @@ class Tornado(EventPoller.Handler):
         if not self.zksnark.verify(proof):
             log.error(self.tag, f'withdraw(to={recipient}), failed to test verify proof for commitment: {note.commitment.to_0x_hex()}')
             return None
-        log.info(self.tag, f'withdraw(to={recipient}), proof generated for commitment: {note.commitment.to_0x_hex()}')
+        log.info(self.tag, f'Proof generated for commitment: {note.commitment.to_0x_hex()}')
 
         # Make withdrawal via relayer
         if use_relayer:
@@ -469,7 +469,7 @@ class Tornado(EventPoller.Handler):
                 if result['status'] == 'CONFIRMED':
                     try:
                         relayer_tx_hash: str = result['txHash']
-                        log.info(self.tag, f'withdraw(to={recipient}) succeed, tx hash: {relayer_tx_hash}')
+                        log.info(self.tag, f'Withdraw {self.unit} {self.symbol.value.upper()} succeed, tx hash: {relayer_tx_hash}')
                         return HexBytes.fromhex(relayer_tx_hash[2:] if relayer_tx_hash.startswith('0x') else relayer_tx_hash)
                     except BaseException as e:
                         log.error(self.tag, f'withdraw(to={recipient}), failed to get transaction hash from relayer job response, exception: {e}, response: {result}')
@@ -522,7 +522,7 @@ class Tornado(EventPoller.Handler):
         if rpc.IsError(tx_hash):
             log.error(self.tag, f'deposit(from={key.eth_address()}), failed to send transaction: {tx_hash.msg}')
             return None
-        log.info(self.tag, f'withdraw(to={recipient}) succeed, tx hash: {tx_hash.to_0x_hex()}')
+        log.info(self.tag, f'Withdraw {self.unit} {self.symbol.value.upper()} succeed, tx hash: {tx_hash.to_0x_hex()}')
         return tx_hash
 
     def start_sync(self) -> bool:
