@@ -13,6 +13,22 @@ A Python implementation to interact with Tornado Cash smart contracts.
 Similar to the original [tornado-cli](https://github.com/tornadocash/tornado-cli), but more features and better experience
 
 
+- [Preparations](#preparations)
+  - [Startup](#startup)
+  - [RPC Service (Optional)](#rpc-service-optional)
+  - [Node.js Runtime (Optional)](#nodejs-runtime-optional)
+- [Running Tests](#running-tests)
+- [Usage & Tutorial](#usage--tutorial)
+  - [Sync Blockchain](#sync-blockchain)
+  - [Deposit](#deposit)
+  - [Batch Deposit](#batch-deposit)
+  - [Offline Deposit](#offline-deposit)
+  - [Withdraw](#withdraw)
+  - [Batch Withdraw](#batch-withdraw)
+- [Known Relayers](#known-relayers)
+- [Supported Deployments](#supported-deployments)
+
+
 ## Preparations
 
 ### Startup
@@ -225,6 +241,22 @@ If succeeded, you will see logs like below.
 Somtimes with a relayer, you need to increase the service fee rate in `config.py`, the default is `1.8%`
 
 ![](/assets/readme_withdraw.png)
+
+
+### Batch Withdraw
+
+Similar to batch deposit, you can withdraw multiple notes to one recipient address at once.  
+```bash
+# python cli.py --withdraw_batch <notes> <recipient> <key/relayer_url>
+# <notes>          : Multiple tornado note text separated by comma without whitespace
+# <recipient>      : Recipient address
+# <key/relayer_url>: Relayer URL or private key in Hex string, '0x' prefix is optional
+
+python cli.py --withdraw_batch \
+    sepolia-eth-0.1-6eb32c15b678855085e7ff524b0ecaf89412b92b66c7f5d8d3b5c3991c7e9c-b6a335ef4ee1bd88460a3fc68b67a30908061a3b8b66160ab39e9aec50d54a,sepolia-eth-0.1-0cb9fc8d22b005fe142abcc225d9826adc789b88c379b7668f712cd7e79b95-71903a81f3926a050f8a88b983769083d6f81c7f9ad8d0ef32abbc66ae629c,sepolia-eth-0.1-50cb4336664d12ebdfb3b83887366435008efb8e7ddd4a24cab1e6296a65e7-a8563b6f1074a19e20fe4a8a43d674835606db89265b69366aeaf7efc516f6
+    0xA09CBdDb54c7bD239F80b252d25002001580BafF \
+    0x0f36b1371ac961e318c284985c184fbac8b4c91ed1765343d4088f04252f9a66
+```
 
 
 ## Known Relayers  

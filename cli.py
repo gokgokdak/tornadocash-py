@@ -97,7 +97,7 @@ def get_option() -> tuple[str, argparse.Namespace] | None:
         nargs=3,
         metavar=("<notes>", "<recipient>", "<key/relayer_url>"),
         help="Make withdrawal in batch\n"
-             "<notes>          : Multiple tornado note text separated by comma\n"
+             "<notes>          : Multiple tornado note text separated by comma without whitespace\n"
              "<recipient>      : Recipient address\n"
              "<key/relayer_url>: Relayer URL or private key in Hex string, '0x' prefix is optional\n"
     )
