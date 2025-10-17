@@ -399,7 +399,8 @@ def _deposit(key: Key, tornado: Tornado, invoice: HexBytes | None = None) -> Hex
             if not os.path.exists(config.BACKUP_DIR):
                 os.makedirs(config.BACKUP_DIR, exist_ok=True)
             with open(backup_path, 'w') as f:
-                f.write(f'{Note.to_text(tornado.chain, tornado.symbol, tornado.unit, note)}\n')
+                f.write(f'Note: {Note.to_text(tornado.chain, tornado.symbol, tornado.unit, note)}\n')
+                f.write(f'Invoice: {Note.to_invoice(tornado.chain, tornado.symbol, tornado.unit, note)}\n')
         except Exception as e:
             log.error(tag, f'Failed to save note to file: {e}')
             return None
@@ -619,7 +620,8 @@ def create_note(chain: ChainID, symbol: Symbol, unit: TornadoUnit) -> None:
         if not os.path.exists(config.BACKUP_DIR):
             os.makedirs(config.BACKUP_DIR, exist_ok=True)
         with open(backup_path, 'w') as f:
-            f.write(f'{backup_str}\n')
+            f.write(f'Note: {backup_str}\n')
+            f.write(f'Invoice: {invoice_str}\n')
     except Exception as e:
         log.error(tag, f'Failed to save note to file: {e}')
         return None
