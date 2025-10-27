@@ -156,6 +156,7 @@ def get_symbol_type(symbol: Symbol) -> SymbolType:
         Symbol.CDAI: SymbolType.ERC20,
         Symbol.USDC: SymbolType.ERC20,
         Symbol.USDT: SymbolType.ERC20,
+        Symbol.WBTC: SymbolType.ERC20,
     }[symbol]
 
 def upper_first_char(s: str) -> str:

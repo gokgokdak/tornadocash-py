@@ -92,6 +92,14 @@ class Interface(object):
     def add_synchronized(self, block_number: int, deposits: list[blockchain.EventDeposit], withdrawals: list[blockchain.EventWithdraw]) -> bool:
         raise NotImplementedError
 
+    '''
+    Get how many deposit and withdrawal events happened after the note was deposited
+    @param  commitment     Commitment of the note
+    @return (num_deposits, num_withdrawals) if found, None otherwise
+    '''
+    def note_age(self, commitment: HexBytes) -> tuple[int, int] | None:
+        raise NotImplementedError
+
 
 class SQLite(Interface):
 
@@ -219,6 +227,18 @@ class SQLite(Interface):
             sql.append(f'UPDATE t_info SET latest_leaf_index = {leaf_index} WHERE latest_leaf_index < {leaf_index};')
         with self.mutex:
             return self._insert(sql)
+
+    def note_age(self, commitment: HexBytes) -> tuple[int, int] | None:
+        sql_deposit: str = f'SELECT COUNT(*) FROM t_event_deposit WHERE leaf_index > (SELECT leaf_index FROM t_event_deposit WHERE commitment="{commitment.to_0x_hex()}");'
+        sql_withdrawal: str = f'SELECT COUNT(*) FROM t_event_withdraw WHERE blk_num > (SELECT blk_num FROM t_event_deposit WHERE commitment="{commitment.to_0x_hex()}");'
+        with self.mutex:
+            result_deposit: list[tuple] | None = self._query(sql_deposit)
+            if result_deposit is None:
+                return None
+            result_withdrawal: list[tuple] | None = self._query(sql_withdrawal)
+            if result_withdrawal is None:
+                return None
+            return result_deposit[0][0], result_withdrawal[0][0]
 
     def _query(self, sql: str) -> list[Any] | None:
         if not self.opened:

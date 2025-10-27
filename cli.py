@@ -132,6 +132,13 @@ def get_option() -> tuple[str, argparse.Namespace] | None:
         help="Print nullifier hash and commitment of the note\n"
              "<note>: Tornado note text"
     )
+    parser.add_argument(
+        '--note_age',
+        required=False,
+        metavar="<note/invoice>",
+        help="Query how many deposits and withdrawals have happened since the note was deposited\n"
+             "<note/invoice>: The private note, or the invoice of the note"
+    )
     args = parser.parse_args()
 
     # Check and get enabled option
@@ -270,6 +277,8 @@ def handle_option(enabled_arg: str, args: argparse.Namespace) -> None:
                       f'  Secret        : 0x{note.secret.hex().zfill(62)}\n'
                       f'  Nullifier Hash: 0x{note.nullifier_hash.hex().zfill(64)}\n'
                       f'  Commitment    : 0x{note.commitment.hex().zfill(64)}')
+    elif enabled_arg == 'note_age':
+        note_age(str(args.note_age))
 
 
 def _sync(tornado: Tornado, keep: bool, signal: threading.Condition | None = None) -> None:
@@ -665,6 +674,26 @@ def note_withdrawn(note_text: str) -> None:
     withdrawn: bool | None = tornado.note_withdrawn(note.nullifier_hash)
     if withdrawn is not None:
         log.info(tag, f'Withdrawn: {str(withdrawn)}')
+
+
+def note_age(note_or_invoice: str) -> None:
+    parsed: tuple[ChainID, Symbol, TornadoUnit, Note] | tuple[ChainID, Symbol, TornadoUnit, HexBytes] | None = Note.from_text(note_or_invoice)
+    if parsed is None:  # Not a note, try to parse as invoice
+        parsed = Note.from_invoice(note_or_invoice)
+        if parsed is None:
+            log.error(f'Failed to parse note or invoice: "{note_or_invoice}"')
+            return
+    chain, symbol, unit, note_or_commitment = parsed
+    tornado: Tornado = Tornado(chain, symbol, unit)
+    tornado.init(True)
+    if isinstance(note_or_commitment, Note):
+        note_or_commitment = note_or_commitment.commitment
+    age: tuple[int, int] | None = tornado.note_age(note_or_commitment)
+    tornado.un_init()
+    if age is not None:
+        deposits, withdrawals = age
+        log.info(tag, f'Since commitment {note_or_commitment.to_0x_hex()}')
+        log.info(tag, f'Deposit: {deposits}, Withdraw: {withdrawals}')
 
 
 if __name__ == "__main__":

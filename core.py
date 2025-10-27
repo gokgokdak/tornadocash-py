@@ -176,6 +176,12 @@ class Tornado(EventPoller.Handler):
             return None
         return result
 
+    # Get how many deposit and withdrawal events happened after the note was deposited
+    # @param    commitment  The commitment of the note to query
+    # @return   Tuple of (num_deposits, num_withdrawals) on success, None if failed
+    def note_age(self, commitment: HexBytes) -> tuple[int, int] | None:
+        return self.db.note_age(commitment)
+
     # Deposit
     # @param    commitment  The commitment of the note to deposit
     # @param    key         The private key to make the deposit
