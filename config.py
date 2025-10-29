@@ -44,7 +44,7 @@ METADATA_PATH: str = os.path.join(os.path.dirname(__file__), 'metadata.json').re
 
 BUNDLED_NODE_JS_EXE: str = os.path.join(
     os.path.dirname(__file__),
-    f'zk/bin/node-{platform.system().lower()}-{platform.machine().lower()}{'.exe' if 'window' in platform.system().lower() else ''}'
+    f"zk/bin/node-{platform.system().lower()}-{platform.machine().lower()}{'.exe' if 'window' in platform.system().lower() else ''}"
 ).replace('\\', '/')
 
 DATABASE_PATHS: dict[ChainID, dict[Symbol, dict[TornadoUnit, str]]] = {

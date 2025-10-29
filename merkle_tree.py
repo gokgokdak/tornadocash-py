@@ -23,7 +23,7 @@ class Interface(object):
     # hex: 2FE54C60D3ACABF3343A35B6EBA15DB4821B340F76E741E2249685ED4899AF6C
     # zero = keccak256('tornado') % FILED_SIZE
     fp1 = Fp1(prime.bn254())
-    digest = int.from_bytes(hash.keccak256('tornado'.encode('ascii')))
+    digest = int.from_bytes(hash.keccak256('tornado'.encode('ascii')), byteorder='big')
     ZERO_VALUE: HexBytes = HexBytes(fp1.mod_reduce(digest).to_bytes(32, byteorder='big'))
 
     def __init__(self, _type: ImplType) -> None:

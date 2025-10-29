@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 from enum import Enum
 from hexbytes import HexBytes
@@ -42,16 +43,16 @@ class Javascript(Interface):
         try:
             js_input: str = json.dumps({
                 # Public Inputs
-                'root'         : str(int.from_bytes(ctx.merkle_proof.root)),
-                'nullifierHash': str(int.from_bytes(ctx.note.nullifier_hash)),
-                'recipient'    : str(int.from_bytes(HexBytes.fromhex(ctx.recipient[2:] if ctx.recipient.startswith('0x') else ctx.recipient.strip('0x')))),
-                'relayer'      : str(int.from_bytes(HexBytes.fromhex(ctx.relayer[2:] if ctx.relayer.startswith('0x') else ctx.relayer.strip('0x')))),
+                'root'         : str(int.from_bytes(ctx.merkle_proof.root, byteorder='big')),
+                'nullifierHash': str(int.from_bytes(ctx.note.nullifier_hash, byteorder='big')),
+                'recipient'    : str(int.from_bytes(HexBytes.fromhex(ctx.recipient[2:] if ctx.recipient.startswith('0x') else ctx.recipient.strip('0x')), byteorder='big')),
+                'relayer'      : str(int.from_bytes(HexBytes.fromhex(ctx.relayer[2:] if ctx.relayer.startswith('0x') else ctx.relayer.strip('0x')), byteorder='big')),
                 'fee'          : str(ctx.fee),
                 'refund'       : str(ctx.refund),
                 # Private Inputs
-                'nullifier'   : str(int.from_bytes(ctx.note.nullifier[::-1])),  # Reverse the byte order, little-endian buffer to big-endian integer
-                'secret'      : str(int.from_bytes(ctx.note.secret[::-1])),     # Reverse the byte order, little-endian buffer to big-endian integer
-                'pathElements': [str(int.from_bytes(node)) for node in ctx.merkle_proof.path_nodes],
+                'nullifier'   : str(int.from_bytes(ctx.note.nullifier[::-1], byteorder='big')),  # Reverse the byte order, little-endian buffer to big-endian integer
+                'secret'      : str(int.from_bytes(ctx.note.secret[::-1], byteorder='big')),     # Reverse the byte order, little-endian buffer to big-endian integer
+                'pathElements': [str(int.from_bytes(node, byteorder='big')) for node in ctx.merkle_proof.path_nodes],
                 'pathIndices' : ctx.merkle_proof.path_indices,
             }, indent=4)
         except Exception as e:
