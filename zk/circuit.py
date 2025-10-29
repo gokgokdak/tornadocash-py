@@ -32,7 +32,11 @@ class Javascript(Interface):
         super().__init__(ImplType.JAVASCRIPT)
         self.TAG: str = __class__.__name__
         if config.BUNDLED_NODE_JS:
-            self.node: str = config.BUNDLED_NODE_JS_EXE
+            sys_node: str | None = shutil.which('node')
+            if sys_node is None:
+                self.node: str = config.BUNDLED_NODE_JS_EXE
+            else:
+                self.node: str = sys_node
         else:
             self.node: str = 'node'
         self.prover_path  : str = os.path.join(os.path.dirname(__file__), 'js/prover.js').replace('\\', '/')

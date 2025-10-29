@@ -25,8 +25,9 @@ RPC_RETRY_INTERVAL_SEC: Second = Second(0.5)
 BLOCKCHAIN_LOG_EVENT_POLL_INTERVAL_SEC: Second = Second(600)
 
 # Use Node.js runtime bundled in './zk/bin/' directory
-# Change to `False` if you want to use a system-installed Node.js
+# Change to `False` if you want to force using system-installed Node.js
 # If `False`, please make sure command `node` is available in your PATH environment
+# If `True`, will try the system-installed Node.js first, if not found, will use the bundled one
 BUNDLED_NODE_JS: bool = True
 
 # Relayer fee rate in percentage, e.g., '1.8' means 1.8%
