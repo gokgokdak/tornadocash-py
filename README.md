@@ -1,9 +1,22 @@
-*__Security Warnings__:*    
-*1. Only run the open source code and scripts locally or binaries compiled on your machine*  
-*2. Do not trust or use __ANY__ Tornado Cash service from the webpage or IPFS*  
-*3. There’s no longer any such thing as an "official website" after the sanctions*  
-*4. Any websites that claim themselves as "official" are 100% __FAKE__*  
-*5. See 👉 [[Block Domain] Fake ethereum Tornado cash websites Phishing](https://github.com/MetaMask/eth-phishing-detect/issues/13826)*
+*__Security Warnings__*  
+* *Only run the __AUDITED__ open source code and scripts locally or binaries compiled on your machine*  
+* *Do not trust or use __ANY__ Tornado Cash service from the webpage or IPFS*  
+* *There’s no longer any such thing as an "official website" after the sanctions*  
+* *Any websites that claim themselves as "official" are 100% __FAKE__*  
+* *See 👉 [[Block Domain] Fake ethereum Tornado cash websites Phishing](https://github.com/MetaMask/eth-phishing-detect/issues/13826)*
+
+
+*__Compliance Statement__*  
+*This project provides open-source client software to interact with on-chain smart contracts.*  
+*It does not custody funds, relay transactions for others, run a mixing service, or charge fees.*  
+*The code is offered as-is for educational and interoperability purposes only.*  
+*By using this software, you are solely responsible for how you use it. You must:*  
+
+* *Comply with all applicable laws and regulations in your jurisdiction (e.g., AML/CFT, sanctions/export controls).*
+* *Avoid interacting with sanctioned persons, entities, or addresses, and perform your own due diligence.*
+* *Use at your own risk; no warranties or guarantees are provided.*  
+
+*Nothing here constitutes legal advice. If you are unsure about your obligations, consult qualified counsel before using this software.*  
 
 
 # TornadoCash-py
