@@ -1,3 +1,9 @@
+[![License](https://img.shields.io/badge/license-GPLv3-green.svg)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-README-blue)](https://github.com/gokgokdak/tornadocash-py#readme)
+[![GitHub stars](https://img.shields.io/github/stars/gokgokdak/tornadocash-py?style=flat)](https://github.com/gokgokdak/tornadocash-py/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/gokgokdak/tornadocash-py)](https://github.com/gokgokdak/tornadocash-py/issues)
+
+
 *__Security Warnings__*  
 * *Only run the __AUDITED__ open source code and scripts locally or binaries compiled on your machine*  
 * *Do not trust or use __ANY__ Tornado Cash service from the webpage or IPFS*  
