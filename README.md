@@ -107,12 +107,12 @@ See 👉 [Node.js official website](https://nodejs.org/en/download) for installa
 
 ## Running Tests
 
-It is **HIGHLY** recommended to run all unit tests before using this program, to make sure the mathematics and cryptographic calculations are correct on your machine.
-- Navigate to the project root directory and run the unit tests using Python's unittest framework:
-    ```bash
-    python -m unittest discover -s test -p "test_*.py"
-    ```
-  
+It is **HIGHLY** recommended to run all unit tests before using this program, to make sure the mathematics and cryptographic calculations are correct on your machine.  
+```bash
+python -m unittest discover -s test -p "test_*.py"
+# Or
+pytest
+```
 To test the deposit and withdrawal functionalities, you can use the Sepolia testnet with a small amount of test ETH.
 
 
