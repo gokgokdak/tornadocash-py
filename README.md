@@ -14,12 +14,13 @@ Similar to the original [tornado-cli](https://github.com/tornadocash/tornado-cli
 
 
 - [Preparations](#preparations)
-  - [Startup](#startup)
+  - [Download Code](#download-code)
+  - [Download Database](#download-database)
+  - [Sync Blockchain](#sync-blockchain)
   - [RPC Service (Optional)](#rpc-service-optional)
   - [Node.js Runtime (Optional)](#nodejs-runtime-optional)
 - [Running Tests](#running-tests)
 - [Usage & Tutorial](#usage--tutorial)
-  - [Sync Blockchain](#sync-blockchain)
   - [Deposit](#deposit)
   - [Batch Deposit](#batch-deposit)
   - [Offline Deposit](#offline-deposit)
@@ -32,20 +33,38 @@ Similar to the original [tornado-cli](https://github.com/tornadocash/tornado-cli
 
 ## Preparations
 
-### Startup
+### Download Code
 
-- Required minimum Python version `3.10+`, recommend `3.13`
-- Clone the repository and install required Python packages by running the following command in the terminal:  
-    ```bash
-    git clone https://github.com/gokgokdak/tornadocash-py.git
-    cd tornadocash-py
-    pip install -r requirements.txt
-    ```
-- Then download the database cache for the first startup
-    ```bash
-    cd ./db
-    git clone https://github.com/gokgokdak/tornadocash-db.git
-    ```
+Required minimum Python version `3.10+`, recommend `3.13`  
+
+Clone this repository and install dependencies    
+    
+```bash
+git clone https://github.com/gokgokdak/tornadocash-py.git
+cd tornadocash-py
+pip install -r requirements.txt
+```
+  
+### Download Database
+According to the Tornado Cash protocol, to initiate a withdrawal, the user is required to rebuild the merkle tree with the contract's **ALL** historical commitments to calculate the latest tree root, which means we have to save a copy of all contract events locally.  
+
+Download the database cache for the first startup to accelerate this process.  
+Put all `.sqlite` files under the `./db` directory.    
+
+```bash
+cd ./db
+git clone https://github.com/gokgokdak/tornadocash-db.git
+```
+
+### Sync Blockchain
+
+The downloaded database has about 1~15 days delay, to make sure the data is up-to-date, please sync the blockchain data before the first use.  
+`python cli.py --sync <chain> <symbol> <unit>`  
+
+Or, sync all deployments:  
+`python cli.py --sync_all`    
+
+It is recommended to keep the program running to stay synchronized with the blockchain, simply add a `--keep` option to `--sync` or `--sync_all` command.  
 
 ### RPC Service (Optional)
 
@@ -74,25 +93,11 @@ It is **HIGHLY** recommended to run all unit tests before using this program, to
     ```bash
     python -m unittest discover -s test -p "test_*.py"
     ```
+  
+To test the deposit and withdrawal functionalities, you can use the Sepolia testnet with a small amount of test ETH.
 
 
 ## Usage & Tutorial
-
-### Sync Blockchain
-
-According to the Tornado Cash protocol, to initiate a withdrawal, the user is required to rebuild the merkle tree with the contract's **ALL** historical commitments to calculate the latest tree root, which means we have to save a copy of all contract events locally.  
-
-Download the prefetched database cache to accelerate the process, put all `.sqlite` files under the `./db` directory.  
-Blockchain database cache 👉 [https://github.com/gokgokdak/tornadocash-db](https://github.com/gokgokdak/tornadocash-db)
-
-Or, you could sync the blockchain data from scratch, which may take a long time depending on your network quality, to do this, please run:  
-`python cli.py --sync <chain> <symbol> <unit>`  
-
-To sync all deployments:  
-`python cli.py --sync_all`    
-
-It is recommended to keep the program running to stay synchronized with the blockchain, simply add a `--keep` option to `--sync` or `--sync_all` command.  
-
 
 ### Deposit
 
