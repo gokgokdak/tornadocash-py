@@ -396,11 +396,26 @@ def sync_all_events(keep: bool) -> None:
         workers.append(thread)
     # Wait for all threads to finish or be interrupted
     cond: threading.Condition = threading.Condition()
-    try:
-        with cond:
-            cond.wait()
-    except KeyboardInterrupt:
-        pass
+    if keep:
+        try:
+            with cond:
+                cond.wait()
+        except KeyboardInterrupt:
+            pass
+    else:
+        all_done: bool = False
+        while not all_done:
+            all_done = True
+            for tornado in initialized:
+                if not tornado.is_catchup():
+                    all_done = False
+            if all_done:
+                break
+            try:
+                with cond:
+                    cond.wait(Second(1))
+            except KeyboardInterrupt:
+                break
     for signal in signals:
         with signal:
             signal.notify_all()

@@ -53,6 +53,7 @@ class Tornado(EventPoller.Handler):
         self.deployment_contract: Contract | rpc.Error | None   = None
         self.token_contract     : Contract | rpc.Error | None   = None
         self.poller             : EventPoller                   = EventPoller(chain)
+        self.catchup            : bool                          = False
         self.tree               : merkle_tree.Interface | None  = None
         self.zksnark            : zk.circuit.Interface          = zk.circuit.create(zk.circuit.ImplType.JAVASCRIPT)
         self.mutex              : threading.Lock                = threading.Lock()
@@ -138,6 +139,10 @@ class Tornado(EventPoller.Handler):
 
     def is_initialized(self) -> bool:
         return not self.initialized
+
+    def is_catchup(self) -> bool:
+        with self.mutex:
+            return self.catchup
 
     def add_handler(self, handler: Handler) -> None:
         with self.mutex:
@@ -546,6 +551,7 @@ class Tornado(EventPoller.Handler):
 
     def on_first_catchup(self) -> None:
         with self.mutex:
+            self.catchup = True
             for h in self.handlers:
                 h.on_first_catchup(self.chain, self.symbol, self.unit)
 
