@@ -384,6 +384,6 @@ Last updated: August 17, 2025
 
 If you like this project 😉☕  
 
-EVM Address: 0xd54eA9e8106227080f72bfD4b9d99BbD96Eacd11  
+EVM Address: 0x5Fe21cB7B590E284F39b715E12a9Ac328b3D3914  
 
-![](/assets/0xd54eA9e8106227080f72bfD4b9d99BbD96Eacd11.png)
+![](/assets/0x5Fe21cB7B590E284F39b715E12a9Ac328b3D3914.png)
