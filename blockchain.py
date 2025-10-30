@@ -241,8 +241,8 @@ class EventPoller(object):
             if first_loop:
                 log.info(self.tag, f'{count_block} blocks behind, latest block number: {latest}')
 
-            # Split into 10000 blocks per request
-            batch_size : int = 10000
+            # Split into N blocks per request
+            batch_size : int = config.BLOCKCHAIN_LOG_EVENT_POLL_BLOCKS_PER_REQUEST[self.chain]
             batch_count: int = count_block // batch_size
             residual   : int = count_block  % batch_size
             chunks     : list[tuple[int, int]] = [(self.current + i * batch_size, self.current + (i + 1) * batch_size - 1) for i in range(batch_count)]

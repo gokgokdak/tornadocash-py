@@ -24,6 +24,18 @@ RPC_RETRY_INTERVAL_SEC: Second = Second(0.5)
 # Consider to increase or decrease based on your network quality
 BLOCKCHAIN_LOG_EVENT_POLL_INTERVAL_SEC: Second = Second(600)
 
+# Number of blocks to query per request when polling blockchain log events
+# Adjust based on the restrictions of your RPC provider
+BLOCKCHAIN_LOG_EVENT_POLL_BLOCKS_PER_REQUEST: dict[ChainID, int] = {
+    ChainID.ETHEREUM : 10000,
+    ChainID.OPTIMISM : 10000,
+    ChainID.BSC      : 10000,
+    ChainID.POLYGON  : 100,
+    ChainID.ARBITRUM : 10000,
+    ChainID.AVALANCHE: 10000,
+    ChainID.SEPOLIA  : 10000,
+}
+
 # Use Node.js runtime bundled in './zk/bin/' directory
 # Change to `False` if you want to force using system-installed Node.js
 # If `False`, please make sure command `node` is available in your PATH environment
