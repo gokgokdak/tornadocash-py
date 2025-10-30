@@ -175,6 +175,16 @@ def handle_option(enabled_arg: str, args: argparse.Namespace) -> None:
         except ValueError as e:
             log.error(tag, f'Invalid arguments for --keep: {args.keep}, exception: {e}')
             return
+        meta: Metadata = util.load_metadata().get(chain)
+        if meta is None:
+            log.error(tag, f'Unsupported chain: {chain_to_string(chain)}')
+            return
+        elif symbol not in meta.deployment:
+            log.error(tag, f'Unsupported symbol: {symbol.value} on chain: {chain_to_string(chain)}')
+            return
+        elif unit not in meta.deployment[symbol]:
+            log.error(tag, f'Unsupported unit: {unit.value} for symbol: {symbol.value} on chain: {chain_to_string(chain)}')
+            return
         sync_events(chain, symbol, unit, keep)
     elif enabled_arg == 'sync_all':
         try:
