@@ -270,7 +270,8 @@ class EventPoller(object):
                         log.info(self.tag, f'Wait {config.RPC_RETRY_INTERVAL_SEC}s and retry')
                         util.wait(config.RPC_RETRY_INTERVAL_SEC, self.cond)
                         result = self.connection.log_receipt(ChecksumAddress(self.contract), chunk[0], chunk[1], [expected.event_hash()])
-                    event_logs.extend(result if result is not None else [])
+                    if not rpc.IsError(result):
+                        event_logs.extend(result if result is not None else [])
                     util.wait(config.RPC_RETRY_INTERVAL_SEC, self.cond)
 
                 # Process event logs
@@ -317,4 +318,5 @@ class EventPoller(object):
                     for h in self.handlers:
                         h.on_first_catchup()
                 # Sleep interval if no new block
-                util.wait(config.BLOCKCHAIN_LOG_EVENT_POLL_INTERVAL_SEC, self.cond)
+                if not self.off:
+                    util.wait(config.BLOCKCHAIN_LOG_EVENT_POLL_INTERVAL_SEC, self.cond)

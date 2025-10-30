@@ -332,12 +332,29 @@ def sync_events(chain: ChainID, symbol: Symbol, unit: TornadoUnit, keep: bool) -
 def sync_all_events(keep: bool) -> None:
     # Load metadata
     meta_data: dict[ChainID, Metadata] = util.load_metadata()
+    # Create RPC connections
+    connections: dict[ChainID, rpc.Interface] = {}
+    def _stop_all_rpc() -> None:
+        for conn in connections.values():
+            conn.stop()
+    for k, v in meta_data.items():
+        log.info(tag, f'Connecting to RPC for chain: {chain_to_string(k)}')
+        if k not in connections:
+            connections[k] = rpc.Connection(k, config.RPC_URLS[k])
+            try:
+                if not connections[k].start():
+                    log.error(tag, f'Failed to connect to RPC: {config.RPC_URLS[k]}')
+                    return
+            except KeyboardInterrupt:
+                log.warn(tag, 'Interrupted')
+                _stop_all_rpc()
+                return
     # Create tornado instances
     instances: list[Tornado] = []
     for chain_id, metadata in meta_data.items():
         for symbol, units in metadata.deployment.items():
             for unit in units.keys():
-                instances.append(Tornado(chain_id, symbol, unit))
+                instances.append(Tornado(chain_id, symbol, unit, connections[chain_id]))
     # Initialize all instances
     succeed: bool = True
     initialized: list[Tornado] = []
@@ -351,44 +368,39 @@ def sync_all_events(keep: bool) -> None:
     if not succeed:
         for tornado in initialized:
             tornado.un_init()
+        _stop_all_rpc()
         return
-    if keep:
-        # Start threads
-        signals: list[threading.Condition] = []
-        workers: list[threading.Thread]    = []
-        for tornado in initialized:
-            def job(_t, _s):
-                try:
-                    _sync(_t, True, _s)
-                except KeyboardInterrupt:
-                    log.warn(tag, f'{util.upper_first_char(chain_to_string(_t.chain))}@{_t.unit.value}{_t.symbol.value.upper()}, interrupted')
-            signal: threading.Condition = threading.Condition()
-            thread: threading.Thread    = threading.Thread(target=lambda t=tornado, s=signal: job(t, s))
-            thread.start()
-            signals.append(signal)
-            workers.append(thread)
-        # Wait for all threads to finish or be interrupted
-        cond: threading.Condition = threading.Condition()
-        try:
-            with cond:
-                cond.wait()
-        except KeyboardInterrupt:
-            pass
-        for signal in signals:
-            with signal:
-                signal.notify_all()
-        for worker in workers:
-            worker.join()
-    else:
-        for tornado in initialized:
+    # Start threads
+    signals: list[threading.Condition] = []
+    workers: list[threading.Thread]    = []
+    for tornado in initialized:
+        def job(_t, _s):
             try:
-                _sync(tornado, False)
+                _sync(_t, keep, _s)
             except KeyboardInterrupt:
-                log.warn(tag, 'Interrupted')
-                break
+                log.warn(tag, f'{util.upper_first_char(chain_to_string(_t.chain))}@{_t.unit.value}{_t.symbol.value.upper()}, interrupted')
+        signal: threading.Condition = threading.Condition()
+        thread: threading.Thread    = threading.Thread(target=lambda t=tornado, s=signal: job(t, s))
+        thread.start()
+        signals.append(signal)
+        workers.append(thread)
+    # Wait for all threads to finish or be interrupted
+    cond: threading.Condition = threading.Condition()
+    try:
+        with cond:
+            cond.wait()
+    except KeyboardInterrupt:
+        pass
+    for signal in signals:
+        with signal:
+            signal.notify_all()
+    for worker in workers:
+        worker.join()
     # Un-initialize all instances
     for tornado in initialized:
         tornado.un_init()
+    # Stop all RPC connections
+    _stop_all_rpc()
 
 
 def _deposit(key: Key, tornado: Tornado, invoice: HexBytes | None = None) -> HexBytes | None:
