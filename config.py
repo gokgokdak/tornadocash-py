@@ -10,8 +10,8 @@ from mytype import ChainID, Second, Symbol, TornadoUnit, chain_to_string
 RPC_URLS: dict[ChainID, str] = {
     ChainID.ETHEREUM : 'https://ethereum-rpc.publicnode.com',
     ChainID.OPTIMISM : 'https://optimism-rpc.publicnode.com',
-    ChainID.BSC      : 'https://bsc-rpc.publicnode.com',
-    ChainID.POLYGON  : 'https://polygon-bor-rpc.publicnode.com',
+    ChainID.BSC      : 'https://public-bsc-mainnet.fastnode.io',
+    ChainID.POLYGON  : 'https://polygon-rpc.com',
     ChainID.ARBITRUM : 'https://arbitrum-one-rpc.publicnode.com',
     ChainID.AVALANCHE: 'https://avalanche-c-chain-rpc.publicnode.com',
     ChainID.SEPOLIA  : 'https://ethereum-sepolia-rpc.publicnode.com',
