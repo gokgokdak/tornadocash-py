@@ -38,7 +38,8 @@ Similar to the original [tornado-cli](https://github.com/tornadocash/tornado-cli
   - [Sync Blockchain](#sync-blockchain)
   - [RPC Service (Optional)](#rpc-service-optional)
   - [Node.js Runtime (Optional)](#nodejs-runtime-optional)
-- [Running Tests](#running-tests)
+- [Running Unittests](#running-unittests)
+- [Functionality Testing](#functionality-testing)
 - [Usage & Tutorial](#usage--tutorial)
   - [Deposit](#deposit)
   - [Batch Deposit](#batch-deposit)
@@ -105,15 +106,24 @@ By default, it uses Node.js binary runtime bundled in the `./zk/bin` directory, 
 See 👉 [Node.js official website](https://nodejs.org/en/download) for installation if you don't want to use the bundled binary.  
 
 
-## Running Tests
+## Running Unittests
 
 It is **HIGHLY** recommended to run all unit tests before using this program, to make sure the mathematics and cryptographic calculations are correct on your machine.  
 ```bash
 python -m unittest discover -s test -p "test_*.py"
 # Or
-pytest
+pytest -q
 ```
-To test the deposit and withdrawal functionalities, you can use the Sepolia testnet with a small amount of test ETH.
+
+
+## Functionality Testing
+To test the deposit and withdrawal functionalities, you can use the Ethereum Sepolia testnet to try it out.  
+Here are some faucets to obtain Sepolia ETH without account registration:
+
+Alchemy 👉 [https://www.alchemy.com/faucets/ethereum-sepolia](https://www.alchemy.com/faucets/ethereum-sepolia)    
+Chainlink 👉 [https://faucets.chain.link/sepolia](https://faucets.chain.link/sepolia)  
+Google 👉 [https://cloud.google.com/application/web3/faucet/ethereum/sepolia](https://cloud.google.com/application/web3/faucet/ethereum/sepolia)    
+QuickNode 👉 [https://faucet.quicknode.com/ethereum/sepolia](https://faucet.quicknode.com/ethereum/sepolia)  
 
 
 ## Usage & Tutorial
@@ -128,7 +138,7 @@ The private key is used to provide ETHs for deposit and pay for gas fees, make s
 # <symbol>: Name of the token, values: eth, bnb, pol, avax, dai, cdai, usdt, usdc, wbtc. Case insensitive
 # <unit>  : Tornado unit of coins, eg: 0.1, 1, 10, ...
 
-python cli.py --deposit 0x0f36dead4beafdead4beafdead4beafdead4beafdead4beafdead4beafde9a66 sepolia eth 0.1
+> python cli.py --deposit 0x0f36dead4beafdead4beafdead4beafdead4beafdead4beafdead4beafde9a66 sepolia eth 0.1
 ```
 
 If succeeded, you will see logs like below, and the generated note will be printed to the console and saved to a backup file under the `./backup` directory.  
@@ -151,7 +161,7 @@ A very convenient way if you have multiple addresses on different chains that ho
 # <json>: JSON string to describe a batch, eg:
 #         {"ethereum": {"eth": {"10": 100, "100": 20}}, "polygon": {"pol": {"100000": 1000}}}'
 
-python cli.py --deposit_batch 0x0f36dead4beafdead4beafdead4beafdead4beafdead4beafdead4beafde9a66 "{'sepolia':{'eth':{'0.1':3}}}"
+> python cli.py --deposit_batch 0x0f36dead4beafdead4beafdead4beafdead4beafdead4beafdead4beafde9a66 "{'sepolia':{'eth':{'0.1':3}}}"
 ```
 
 
@@ -214,7 +224,7 @@ The private key is used to pay for gas fees, make sure it has enough ETH.
 # <recipient>      : Recipient address
 # <key/relayer_url>: Relayer URL, or a private key to pay the gas fee in hex string, '0x' prefix is optional
      
-python cli.py --withdraw \
+> python cli.py --withdraw \
     sepolia-eth-0.1-e7d384e9ee682ea4c209893b0d618094bedfb7b580400686fc6ef350514667-bb5654636d95ffb21235a79cb504a847f4c0eba695346491fa105761e7a0f8 \
     0xA09CBdDb54c7bD239F80b252d25002001580BafF \
     0x0f36dead4beafdead4beafdead4beafdead4beafdead4beafdead4beafde9a66
@@ -222,7 +232,7 @@ python cli.py --withdraw \
 
 With a relayer service, the private key is not required, but the relayer will charge a fee from the withdrawn amount.
 ```bash
-python cli.py --withdraw \
+> python cli.py --withdraw \
     sepolia-eth-0.1-e7d384e9ee682ea4c209893b0d618094bedfb7b580400686fc6ef350514667-bb5654636d95ffb21235a79cb504a847f4c0eba695346491fa105761e7a0f8 \
     0xA09CBdDb54c7bD239F80b252d25002001580BafF \
     https://eth.t-relayer.com
@@ -277,7 +287,7 @@ Similar to batch deposit, you can withdraw multiple notes to one recipient addre
 # <recipient>      : Recipient address
 # <key/relayer_url>: Relayer URL or private key in Hex string, '0x' prefix is optional
 
-python cli.py --withdraw_batch \
+> python cli.py --withdraw_batch \
     sepolia-eth-0.1-6eb32c15b678855085e7ff524b0ecaf89412b92b66c7f5d8d3b5c3991c7e9c-b6a335ef4ee1bd88460a3fc68b67a30908061a3b8b66160ab39e9aec50d54a,sepolia-eth-0.1-0cb9fc8d22b005fe142abcc225d9826adc789b88c379b7668f712cd7e79b95-71903a81f3926a050f8a88b983769083d6f81c7f9ad8d0ef32abbc66ae629c,sepolia-eth-0.1-50cb4336664d12ebdfb3b83887366435008efb8e7ddd4a24cab1e6296a65e7-a8563b6f1074a19e20fe4a8a43d674835606db89265b69366aeaf7efc516f6
     0xA09CBdDb54c7bD239F80b252d25002001580BafF \
     0x0f36b1371ac961e318c284985c184fbac8b4c91ed1765343d4088f04252f9a66
@@ -292,7 +302,9 @@ The bigger the number, the more anonymity you get.
 # python cli.py --note_age <note/invoice>
 # <note/invoice>: The private note, or the invoice of the note
 
-python cli.py --note_age sepolia-eth-0.1-122ec0ef7098492ae61f26695edd4c070ca40ca6b1455ff64843f53ad03780cb
+> python cli.py --note_age sepolia-eth-0.1-122ec0ef7098492ae61f26695edd4c070ca40ca6b1455ff64843f53ad03780cb
+[I 2025-10-31 00:27:12:515 tid=676076 cli] Since commitment 0x122ec0ef7098492ae61f26695edd4c070ca40ca6b1455ff64843f53ad03780cb (cli.py:732)
+[I 2025-10-31 00:27:12:515 tid=676076 cli] Deposit: 54, Withdraw: 31 (cli.py:733)
 ```
 
 
