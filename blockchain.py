@@ -272,7 +272,12 @@ class EventPoller(object):
                         result = self.connection.log_receipt(ChecksumAddress(self.contract), chunk[0], chunk[1], [expected.event_hash()])
                     if not rpc.IsError(result):
                         event_logs.extend(result if result is not None else [])
+                    if self.off:
+                        break
                     util.wait(config.RPC_RETRY_INTERVAL_SEC, self.cond)
+                if self.off:
+                    break_early = True
+                    break
 
                 # Process event logs
                 for event in event_logs:
