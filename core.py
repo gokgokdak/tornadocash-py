@@ -281,7 +281,7 @@ class Tornado(EventPoller.Handler):
         if rpc.IsError(tx_hash):
             log.error(self.tag, f'deposit(from={key.eth_address()}), failed to send transaction: {tx_hash.msg}')
             return None
-        log.info(self.tag, f'Deposit {self.unit} {self.symbol.value.upper()} succeed, tx hash: {tx_hash.hex()}', log.Color.CYAN, log.Style.BOLD)
+        log.info(self.tag, f'Deposit {self.unit.value} {self.symbol.value.upper()} succeed, tx hash: {tx_hash.hex()}', log.Color.CYAN, log.Style.BOLD)
         return tx_hash
 
     # Withdraw
@@ -480,7 +480,7 @@ class Tornado(EventPoller.Handler):
                 if result['status'] == 'MINED' or result['status'] == 'CONFIRMED':
                     try:
                         relayer_tx_hash: str = result['txHash']
-                        log.info(self.tag, f'Withdraw {self.unit} {self.symbol.value.upper()} succeed, tx hash: {relayer_tx_hash}')
+                        log.info(self.tag, f'Withdraw {self.unit.value} {self.symbol.value.upper()} succeed, tx hash: {relayer_tx_hash}')
                         return HexBytes.fromhex(relayer_tx_hash[2:] if relayer_tx_hash.startswith('0x') else relayer_tx_hash)
                     except BaseException as e:
                         log.error(self.tag, f'withdraw(to={recipient}), failed to get transaction hash from relayer job response, exception: {e}, response: {result}')
@@ -533,7 +533,7 @@ class Tornado(EventPoller.Handler):
         if rpc.IsError(tx_hash):
             log.error(self.tag, f'deposit(from={key.eth_address()}), failed to send transaction: {tx_hash.msg}')
             return None
-        log.info(self.tag, f'Withdraw {self.unit} {self.symbol.value.upper()} succeed, tx hash: {tx_hash.to_0x_hex()}')
+        log.info(self.tag, f'Withdraw {self.unit.value} {self.symbol.value.upper()} succeed, tx hash: {tx_hash.to_0x_hex()}')
         return tx_hash
 
     def start_sync(self) -> bool:
