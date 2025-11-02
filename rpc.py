@@ -107,10 +107,6 @@ class Connection(Interface):
             self.w3 = Web3(Web3.LegacyWebSocketProvider(self.url))
         else:
             raise ValueError(f'Unsupported RPC url: {self.url}')
-        if not self.w3.is_connected():
-            log.error(self.TAG, f'Failed to connect to {self.url}')
-            self.w3 = None
-            return False
         if self.chain == ChainID.POLYGON:
             self.w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
         self.w3.eth = Web3EthWrapper(self.w3, self.chain)

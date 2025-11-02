@@ -348,7 +348,6 @@ def sync_all_events(keep: bool) -> None:
         for conn in connections.values():
             conn.stop()
     for k, v in meta_data.items():
-        log.info(tag, f'Connecting to RPC for chain: {chain_to_string(k)}')
         if k not in connections:
             connections[k] = rpc.Connection(k, config.RPC_URLS[k])
             try:
