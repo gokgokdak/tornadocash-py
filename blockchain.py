@@ -221,18 +221,16 @@ class EventPoller(object):
     def _loop(self) -> None:
         first_loop: bool = True
         while not self.off:
-            latest     : int | rpc.Error = self.connection.latest_block_number()
-            count_block: int             = 0
-
+            latest: int | rpc.Error = 0
             # Get latest block number
             while not self.off:
+                latest = self.connection.latest_block_number()
                 if not rpc.IsError(latest):
                     break
-                latest = self.connection.latest_block_number()
                 log.error(self.tag, f'Failed to get latest block number, error: {latest.msg}')
                 log.info(self.tag, f'Wait {config.RPC_RETRY_INTERVAL_SEC}s and retry')
                 util.wait(config.RPC_RETRY_INTERVAL_SEC, self.cond)
-            count_block = latest - self.current + 1
+            count_block: int = latest - self.current + 1
 
             # Notify latest block number
             for h in self.handlers:
