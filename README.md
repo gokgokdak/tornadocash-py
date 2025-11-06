@@ -2,6 +2,7 @@
 [![Docs](https://img.shields.io/badge/docs-README-blue)](https://github.com/gokgokdak/tornadocash-py#readme)
 [![GitHub stars](https://img.shields.io/github/stars/gokgokdak/tornadocash-py?style=flat)](https://github.com/gokgokdak/tornadocash-py/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/gokgokdak/tornadocash-py)](https://github.com/gokgokdak/tornadocash-py/issues)
+[![Python application](https://github.com/gokgokdak/tornadocash-py/actions/workflows/python-app.yml/badge.svg?branch=main)](https://github.com/gokgokdak/tornadocash-py/actions/workflows/python-app.yml)
 
 
 *__Security Warnings__*  
