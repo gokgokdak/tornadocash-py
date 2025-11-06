@@ -72,8 +72,11 @@ Download the database cache for the first startup to accelerate this process.
 Put all `.sqlite` files under the `./db` directory.    
 
 ```bash
-cd ./db
-git clone https://github.com/gokgokdak/tornadocash-db.git
+# Under the tornadocash-py root directory
+cd db
+git clone https://github.com/gokgokdak/tornadocash-db.git cache
+mv cache/*.sqlite .
+rm -rf cache
 ```
 
 ### Sync Blockchain
