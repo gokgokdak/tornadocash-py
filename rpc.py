@@ -1,3 +1,4 @@
+from enum import Enum
 from eth_account.datastructures import SignedTransaction
 from eth_typing import ChecksumAddress
 from hexbytes import HexBytes
@@ -15,17 +16,75 @@ from mytype import ChainID, Key
 import log
 
 
+class ErrorCode(Enum):
+    UNKNOWN             = 'UNKNOWN'
+    RPC_NOT_STARTED     = 'RPC_NOT_STARTED'
+    RPC_CALL_RATE_LIMIT = 'RPC_CALL_RATE_LIMIT'
+    SSL_ERROR           = 'SSL_ERROR'
+    CONNECTION_ABORTED  = 'CONNECTION_ABORTED'
+    NONCE_TOO_LOW       = 'NONCE_TOO_LOW'
+    TX_HASH_NOT_FOUND   = 'TX_HASH_NOT_FOUND'
+    MAX_FEE_TOO_LOW     = 'MAX_FEE_LESS_THAN_BASE'
+    INSUFFICIENT_FUNDS  = 'INSUFFICIENT_FUNDS'
+    REPLACE_UNDERPRICE  = 'REPLACE_UNDERPRICE'
+    EXECUTION_REVERTED  = 'EXECUTION_REVERTED'
+
+
 class Error(object):
 
-    def __init__(self, call_param: tuple[Any, ...], msg: str = '') -> None:
+    def __init__(self, code: ErrorCode, call_param: tuple[Any, ...], msg: str = '') -> None:
+        self.code      : ErrorCode       = code
         self.call_param: tuple[Any, ...] = call_param
         self.msg       : str             = msg
 
 
-def IsError(value: Any) -> bool:
+def is_error(value: Any) -> bool:
     if isinstance(value, Error):
         return True
     return False
+
+
+def parse_exception_to_error_code(e: Exception) -> ErrorCode:
+    text: str = str(e).lower()
+    if all(key in text for key in ['too many requests', 'rate limit']):
+        return ErrorCode.RPC_CALL_RATE_LIMIT
+    elif any(key in text for key in ['sslerror', 'ssleoferror']):
+        return ErrorCode.SSL_ERROR
+    elif all(key in text for key in ['connection', 'abort']):
+        return ErrorCode.CONNECTION_ABORTED
+    elif all(key in text for key in ['nonce', 'low']):
+        return ErrorCode.NONCE_TOO_LOW
+    elif all(key in text for key in ['transaction', 'hash', 'not found']):
+        return ErrorCode.TX_HASH_NOT_FOUND
+    elif all(key in text for key in ['max fee', 'less than', 'base fee']):
+        return ErrorCode.MAX_FEE_TOO_LOW
+    elif all(key in text for key in ['insufficient']) and any(key in text for key in ['balance', 'funds']):
+        return ErrorCode.INSUFFICIENT_FUNDS
+    elif all(key in text for key in ['replace', 'underprice']):
+        return ErrorCode.REPLACE_UNDERPRICE
+    elif all(key in text for key in ['execution', 'reverted']):
+        return ErrorCode.EXECUTION_REVERTED
+    return ErrorCode.UNKNOWN
+
+
+def contract_call(contract: Contract, method: str, *args) -> Any | Error:
+    try:
+        func = contract.get_function_by_name(method)
+        result: Any = func(*args).call()
+        return result
+    except Exception as e:
+        code: ErrorCode = parse_exception_to_error_code(e)
+        return Error(code, (contract.address, method, args), str(e))
+
+
+def contract_build_tx(contract: Contract, method: str, tx_params: TxParams, *args) -> TxParams | Error:
+    try:
+        func = contract.get_function_by_name(method)
+        tx: TxParams = func(*args).build_transaction(tx_params)
+        return tx
+    except Exception as e:
+        code: ErrorCode = parse_exception_to_error_code(e)
+        return Error(code, (contract.address, method, tx_params, args), str(e))
 
 
 class Web3EthWrapper(Eth):
@@ -136,7 +195,7 @@ class Connection(Interface):
             return Wei(self.w3.eth.gas_price)
         if self.turn_off:
             log.error(self.TAG, "Connection not started")
-            return Error(call_param)
+            return Error(ErrorCode.RPC_NOT_STARTED, call_param)
         if callback is None:
             return self.run_sync(_, signature, call_param)
         self.run_async(_, signature, call_param, callback)
@@ -148,7 +207,7 @@ class Connection(Interface):
             return self.w3.eth.contract(address=address, abi=abi)
         if self.turn_off:
             log.error(self.TAG, "Connection not started")
-            return Error(call_param)
+            return Error(ErrorCode.RPC_NOT_STARTED, call_param)
         if callback is None:
             return self.run_sync(_, signature, call_param)
         self.run_async(_, signature, call_param, callback)
@@ -160,7 +219,7 @@ class Connection(Interface):
             return self.w3.eth.block_number
         if self.turn_off:
             log.error(self.TAG, "Connection not started")
-            return Error(call_param)
+            return Error(ErrorCode.RPC_NOT_STARTED, call_param)
         if callback is None:
             return self.run_sync(_, signature, call_param)
         self.run_async(_, signature, call_param, callback)
@@ -177,7 +236,7 @@ class Connection(Interface):
             })
         if self.turn_off:
             log.error(self.TAG, "Connection not started")
-            return Error(call_param)
+            return Error(ErrorCode.RPC_NOT_STARTED, call_param)
         if callback is None:
             return self.run_sync(_, signature, call_param)
         self.run_async(_, signature, call_param, callback)
@@ -189,7 +248,7 @@ class Connection(Interface):
             return self.w3.eth.get_transaction_receipt(tx_hash)
         if self.turn_off:
             log.error(self.TAG, "Connection not started")
-            return Error(call_param)
+            return Error(ErrorCode.RPC_NOT_STARTED, call_param)
         if callback is None:
             return self.run_sync(_, signature, call_param)
         def bridge(result: TxReceipt|Error) -> None:
@@ -200,7 +259,7 @@ class Connection(Interface):
             else:
                 msg: str = f'w3.eth.get_transaction_receipt(tx_hash="{tx_hash.to_0x_hex()}") return unexpected type "{type(result)}" with value "{result}"'
                 log.error(self.TAG, msg)
-                callback(Error(call_param, msg))
+                callback(Error(ErrorCode.UNKNOWN, call_param, msg))
         self.run_async(_, signature, call_param, bridge)
 
     def nonce(self, address: ChecksumAddress, callback: Callable[[int | Error], None] = None) -> int | Error | None:
@@ -210,7 +269,7 @@ class Connection(Interface):
             return self.w3.eth.get_transaction_count(address)
         if self.turn_off:
             log.error(self.TAG, "Connection not started")
-            return Error(call_param)
+            return Error(ErrorCode.RPC_NOT_STARTED, call_param)
         if callback is None:
             return self.run_sync(_, signature, call_param)
         self.run_async(_, signature, call_param, callback)
@@ -222,7 +281,7 @@ class Connection(Interface):
             return self.w3.eth.account.sign_transaction(transaction, private_key.private().to_bytes())
         if self.turn_off:
             log.error(self.TAG, "Connection not started")
-            return Error(call_param)
+            return Error(ErrorCode.RPC_NOT_STARTED, call_param)
         if callback is None:
             return self.run_sync(_, signature, call_param)
         self.run_async(_, signature, call_param, callback)
@@ -234,7 +293,7 @@ class Connection(Interface):
             return self.w3.eth.send_raw_transaction(transaction.raw_transaction)
         if self.turn_off:
             log.error(self.TAG, "Connection not started")
-            return Error(call_param)
+            return Error(ErrorCode.RPC_NOT_STARTED, call_param)
         if callback is None:
             return self.run_sync(_, signature, call_param)
         self.run_async(_, signature, call_param, callback)
@@ -264,10 +323,10 @@ class Connection(Interface):
                 try:
                     result = action()
                 except Exception as e:
-                    text: str = str(e)
-                    lines: list[str] = [f'{signature} raised {type(e)} exception, detail: {text}']
+                    code : ErrorCode = parse_exception_to_error_code(e)
+                    lines: list[str] = [f'{signature} raised {type(e)} exception, {code.value}']
                     log.debug(self.TAG, lines)
-                    result = Error(call_param, str(e))
+                    result = Error(code, call_param, str(e))
                 break
             done = True
             done_event.set()
@@ -288,12 +347,12 @@ class Connection(Interface):
                 try:
                     result = action()
                 except Exception as e:
-                    text: str = str(e)
-                    lines: list[str] = [f'{signature} raised {type(e)} exception, detail: {text}']
-                    stack: str = traceback.format_exc()
+                    code : ErrorCode = parse_exception_to_error_code(e)
+                    lines: list[str] = [f'{signature} raised {type(e)} exception, {code.value}']
+                    stack: str       = traceback.format_exc()
                     lines.extend(stack.split('\n'))
                     log.debug(self.TAG, lines)
-                    result = Error(call_param, str(e))
+                    result = Error(code, call_param, str(e))
                 break
             callback(result)
         with self.condition:

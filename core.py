@@ -71,12 +71,12 @@ class Tornado(EventPoller.Handler):
         self.proxy_contract      = self.connection.get_contract(address=self.proxy_address, abi=proxy_abi)
         self.deployment_contract = self.connection.get_contract(self.deployment_address, deployment_abi)
         self.token_contract      = self.connection.get_contract(self.meta.token_address[self.symbol], erc20_abi) if SymbolType.ERC20 == get_symbol_type(self.symbol) else None
-        if rpc.IsError(self.proxy_contract):
-            raise RuntimeError(f'Failed to get proxy contract instance: {self.proxy_contract.msg}')
-        if rpc.IsError(self.deployment_contract):
-            raise RuntimeError(f'Failed to get deployment contract instance: {self.deployment_contract.msg}')
-        if rpc.IsError(self.token_contract):
-            raise RuntimeError(f'Failed to get token contract instance: {self.deployment_contract.msg}')
+        if rpc.is_error(self.proxy_contract):
+            raise RuntimeError(f'Failed to get proxy contract instance, RPC error: {self.proxy_contract.code.value}')
+        if rpc.is_error(self.deployment_contract):
+            raise RuntimeError(f'Failed to get deployment contract instance, RPC error: {self.deployment_contract.code.value}')
+        if rpc.is_error(self.token_contract):
+            raise RuntimeError(f'Failed to get token contract instance, RPC error: {self.deployment_contract.code.value}')
 
     '''
     Initialize Tornado instance
@@ -158,12 +158,9 @@ class Tornado(EventPoller.Handler):
     #           False: The corresponding note has not been used
     #           None : Failed to query the blockchain, e.g. RPC connection error
     def note_deposited(self, commitment: HexBytes) -> bool | None:
-        # Call contract function
-        try:
-            function = self.deployment_contract.functions.commitments(commitment)
-            result: bool = function.call()
-        except BaseException as e:
-            log.error(self.tag, f'note_deposited(), failed to call contract function commitments(bytes32): {e}')
+        result: bool | rpc.Error = rpc.contract_call(self.deployment_contract, 'commitments', commitment)
+        if rpc.is_error(result):
+            log.error(self.tag, f'note_deposited(), failed to call contract function commitments(bytes32), RPC error: {result.code.value}')
             return None
         return result
 
@@ -173,11 +170,9 @@ class Tornado(EventPoller.Handler):
     #           False: The corresponding note has not been used
     #           None : Failed to query the blockchain, e.g. RPC connection error
     def note_withdrawn(self, nullifier_hash: HexBytes) -> bool | None:
-        try:
-            function = self.deployment_contract.functions.nullifierHashes(nullifier_hash)
-            result: bool = function.call()
-        except BaseException as e:
-            log.error(self.tag, f'note_withdrawn(), failed to call contract function nullifierHashes(bytes32): {e}')
+        result: bool | rpc.Error = rpc.contract_call(self.deployment_contract, 'nullifierHashes', nullifier_hash)
+        if rpc.is_error(result):
+            log.error(self.tag, f'note_withdrawn(), failed to call contract function nullifierHashes(bytes32), RPC error: {result.code.value}')
             return None
         return result
 
@@ -203,83 +198,81 @@ class Tornado(EventPoller.Handler):
 
         # Get nonce
         nonce: Nonce | rpc.Error = self.connection.nonce(key.eth_address())
-        if rpc.IsError(nonce):
-            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to get nonce: {nonce.msg}')
+        if rpc.is_error(nonce):
+            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to get nonce, RPC error: {nonce.code.value}')
             return None
 
         # Allowance for ERC20 token
         if SymbolType.ERC20 == get_symbol_type(self.symbol):
-            need_increase: bool = True
             # Check allowance
-            try:
-                function = self.token_contract.functions.allowance(key.eth_address(), self.proxy_address)
-                result: int = function.call()
-                if result >= unit_to_wei(self.unit, self.meta.decimals[self.symbol]):
-                    need_increase = False
-            except BaseException as e:
-                log.error(self.tag, f'deposit(from={key.eth_address()}), failed to call contract function allowance(address,address): {e}')
+            allowance: int | rpc.Error = rpc.contract_call(self.token_contract, 'allowance', key.eth_address(), self.proxy_address)
+            if rpc.is_error(allowance):
+                log.error(self.tag, f'deposit(from={key.eth_address()}), failed to call contract function allowance(address,address), RPC error: {allowance.code.value}')
                 return None
-            # Increase allowance
-            if need_increase:
+            if allowance < unit_to_wei(self.unit, self.meta.decimals[self.symbol]):
                 # Call contract approve() to build transaction
-                try:
-                    call = self.token_contract.functions.approve(self.proxy_address, unit_to_wei(self.unit, self.meta.decimals[self.symbol]))
-                    tx: TxParams = {
-                        'from'   : key.eth_address(),
-                        'chainId': self.chain.value,
-                        'nonce'  : Nonce(nonce),
-                    }
-                    tx = call.build_transaction(tx)
-                except BaseException as e:
-                    log.error(self.tag, f'deposit(from={key.eth_address()}), failed to call contract function approve(address,uint256): {e}')
+                tx: TxParams = {
+                    'from'   : key.eth_address(),
+                    'chainId': self.chain.value,
+                    'nonce'  : Nonce(nonce),
+                }
+                built_tx: TxParams | rpc.Error = rpc.contract_build_tx(
+                    self.token_contract, 'approve', tx,
+                    self.proxy_address, unit_to_wei(self.unit, self.meta.decimals[self.symbol])
+                )
+                if rpc.is_error(built_tx):
+                    log.error(self.tag, f'deposit(from={key.eth_address()}), approve tokens, failed to build transaction, RPC error: {built_tx.code.value}')
                     return None
                 # Sign
-                signed_tx: SignedTransaction | rpc.Error = self.connection.sign_transaction(tx, key)
-                if rpc.IsError(signed_tx):
-                    log.error(self.tag, f'deposit(from={key.eth_address()}), failed to sign transaction: {signed_tx.msg}')
+                signed_tx: SignedTransaction | rpc.Error = self.connection.sign_transaction(built_tx, key)
+                if rpc.is_error(signed_tx):
+                    log.error(self.tag, f'deposit(from={key.eth_address()}), approve tokens, failed to sign transaction, RPC error: {signed_tx.code.value}')
                     return None
                 # Send
                 tx_hash: HexBytes | rpc.Error = self.connection.send_transaction(signed_tx)
-                if rpc.IsError(tx_hash):
-                    log.error(self.tag, f'deposit(from={key.eth_address()}), failed to send transaction: {tx_hash.msg}')
+                if rpc.is_error(tx_hash):
+                    log.error(self.tag, f'deposit(from={key.eth_address()}), approve tokens, failed to send transaction, RPC error: {tx_hash.code.value}')
                     return None
                 # Increase nonce
                 nonce += 1
                 # Wait for the allowance to be updated
+                max_waits: int = 30
+                counter  : int = 0
                 while True:
-                    try:
-                        function = self.token_contract.functions.allowance(key.eth_address(), self.proxy_address)
-                        result: int = function.call()
-                        if result >= unit_to_wei(self.unit, self.meta.decimals[self.symbol]):
-                            break
-                    except BaseException as e:
-                        log.error(self.tag, f'deposit(from={key.eth_address()}), failed to call contract function allowance(address,address): {e}')
+                    counter += 1
+                    allowance = rpc.contract_call(self.token_contract, 'allowance', key.eth_address(), self.proxy_address)
+                    if rpc.is_error(allowance):
+                        log.error(self.tag, f'deposit(from={key.eth_address()}), approve tokens, failed to call contract function allowance(address,address), RPC error: {allowance.code.value}')
                         return None
-                    wait(Second(1))
+                    if allowance >= unit_to_wei(self.unit, self.meta.decimals[self.symbol]):
+                        break
+                    if counter >= max_waits:
+                        log.error(self.tag, f'deposit(from={key.eth_address()}), approve tokens, timeout waiting for allowance to be updated')
+                        return None
+                    log.info(self.tag, f'deposit(from={key.eth_address()}), approve tokens, waiting for allowance to be updated...')
+                    wait(Second(2))
 
         # Call contract deposit() to build transaction
-        try:
-            call = self.proxy_contract.functions.deposit(self.deployment_address, commitment, b'')
-            tx: TxParams = {
-                'from'   : key.eth_address(),
-                'chainId': self.chain.value,
-                'nonce'  : Nonce(nonce),
-            }
-            if SymbolType.NATIVE == get_symbol_type(self.symbol):
-                tx['value'] = unit_to_wei(self.unit, self.meta.decimals[self.symbol])
-            tx = call.build_transaction(tx)
-        except BaseException as e:
-            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to deposit: {e}')
+        tx: TxParams = {
+            'from'   : key.eth_address(),
+            'chainId': self.chain.value,
+            'nonce'  : Nonce(nonce),
+        }
+        if SymbolType.NATIVE == get_symbol_type(self.symbol):
+            tx['value'] = unit_to_wei(self.unit, self.meta.decimals[self.symbol])
+        built_tx: TxParams | rpc.Error = rpc.contract_build_tx(self.proxy_contract, 'deposit', tx, self.deployment_address, commitment, b'')
+        if rpc.is_error(built_tx):
+            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to build transaction, RPC error: {built_tx.code.value}')
             return None
         # Sign
-        signed_tx: SignedTransaction | rpc.Error = self.connection.sign_transaction(tx, key)
-        if rpc.IsError(signed_tx):
-            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to sign transaction: {signed_tx.msg}')
+        signed_tx: SignedTransaction | rpc.Error = self.connection.sign_transaction(built_tx, key)
+        if rpc.is_error(signed_tx):
+            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to sign transaction, RPC error: {signed_tx.code.value}')
             return None
         # Send
         tx_hash: HexBytes | rpc.Error = self.connection.send_transaction(signed_tx)
-        if rpc.IsError(tx_hash):
-            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to send transaction: {tx_hash.msg}')
+        if rpc.is_error(tx_hash):
+            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to send transaction, RPC error: {tx_hash.code.value}')
             return None
         log.info(self.tag, f'Deposit {self.unit.value} {self.symbol.value.upper()} succeed, tx hash: {tx_hash.hex()}', log.Color.CYAN, log.Style.BOLD)
         return tx_hash
@@ -367,8 +360,8 @@ class Tornado(EventPoller.Handler):
                 (total_wei * int(float(config.RELAYER_FEE_RATE) * round_decimal)) // (round_decimal * 100)
             )
             gas_price: Wei | rpc.Error = self.connection.gas_price()
-            if rpc.IsError(gas_price):
-                log.error(self.tag, f'withdraw(to={recipient}), failed to get gas price: {gas_price.msg}')
+            if rpc.is_error(gas_price):
+                log.error(self.tag, f'withdraw(to={recipient}), failed to get gas price, RPC error: {gas_price.code.value}')
                 return None
             expense: Wei = Wei(gas_price * 500_000)
             if get_symbol_type(self.symbol) == SymbolType.NATIVE:
@@ -500,38 +493,37 @@ class Tornado(EventPoller.Handler):
 
         # Make withdrawal directly
         nonce: Nonce | rpc.Error = self.connection.nonce(key.eth_address())
-        if rpc.IsError(nonce):
-            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to get nonce: {nonce.msg}')
+        if rpc.is_error(nonce):
+            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to get nonce, RPC error: {nonce.code.value}')
             return None
-        try:
-            call = self.proxy_contract.functions.withdraw(
-                self.deployment_address,
-                HexBytes.fromhex(proof['solidity']['proof'][2:] if proof['solidity']['proof'].startswith('0x') else proof['solidity']['proof']),
-                merkle_proof.root,
-                note.nullifier_hash,
-                recipient,
-                relayer_address,
-                relayer_fee,
-                refund,
-            )
-            tx: TxParams = {
-                'from'   : key.eth_address(),
-                'chainId': self.chain.value,
-                'nonce'  : Nonce(nonce),
-            }
-            tx = call.build_transaction(tx)
-        except BaseException as e:
-            log.error(self.tag, f'withdraw(to={recipient}), failed to deposit: {e}')
+        tx: TxParams = {
+            'from'   : key.eth_address(),
+            'chainId': self.chain.value,
+            'nonce'  : Nonce(nonce),
+        }
+        built_tx: TxParams | rpc.Error = rpc.contract_build_tx(
+            self.proxy_contract, 'withdraw', tx,
+            self.deployment_address,
+            HexBytes.fromhex(proof['solidity']['proof'][2:] if proof['solidity']['proof'].startswith('0x') else proof['solidity']['proof']),
+            merkle_proof.root,
+            note.nullifier_hash,
+            recipient,
+            relayer_address,
+            relayer_fee,
+            refund,
+        )
+        if rpc.is_error(built_tx):
+            log.error(self.tag, f'withdraw(to={recipient}), failed to build transaction, RPC error: {built_tx.code.value}')
             return None
         # Sign
-        signed_tx: SignedTransaction | rpc.Error = self.connection.sign_transaction(tx, key)
-        if rpc.IsError(signed_tx):
-            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to sign transaction: {signed_tx.msg}')
+        signed_tx: SignedTransaction | rpc.Error = self.connection.sign_transaction(built_tx, key)
+        if rpc.is_error(signed_tx):
+            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to sign transaction, RPC error: {signed_tx.code.value}')
             return None
         # Send
         tx_hash: HexBytes | rpc.Error = self.connection.send_transaction(signed_tx)
-        if rpc.IsError(tx_hash):
-            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to send transaction: {tx_hash.msg}')
+        if rpc.is_error(tx_hash):
+            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to send transaction, RPC error: {tx_hash.code.value}')
             return None
         log.info(self.tag, f'Withdraw {self.unit.value} {self.symbol.value.upper()} succeed, tx hash: {tx_hash.to_0x_hex()}')
         return tx_hash

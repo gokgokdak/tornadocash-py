@@ -56,8 +56,8 @@ class EventDeposit(LogEvent):
     def __str__(self) -> str:
         return (f'timestamp={self.timestamp}, '
                 f'blk_num={self.blk_num}, '
-                f'tx_hash={self.tx_hash}, '
-                f'commitment={self.commitment}, '
+                f'tx_hash={self.tx_hash.to_0x_hex()}, '
+                f'commitment={self.commitment.to_0x_hex()}, '
                 f'leaf_index={self.leaf_index}')
 
     def __dict__(self) -> dict:
@@ -104,7 +104,7 @@ class EventWithdraw(LogEvent):
     def __str__(self) -> str:
         return (f'blk_num={self.blk_num}, '
                 f'tx_hash={self.tx_hash}, '
-                f'nullifier_hash={self.nullifier_hash}, '
+                f'nullifier_hash={self.nullifier_hash.to_0x_hex()}, '
                 f'recipient={self.recipient}, '
                 f'fee={self.fee}')
 
@@ -225,9 +225,9 @@ class EventPoller(object):
             # Get latest block number
             while not self.off:
                 latest = self.connection.latest_block_number()
-                if not rpc.IsError(latest):
+                if not rpc.is_error(latest):
                     break
-                log.error(self.tag, f'Failed to get latest block number, error: {latest.msg}')
+                log.error(self.tag, f'Failed to get latest block number, RPC error: {latest.code.value}')
                 log.info(self.tag, f'Wait {config.RPC_RETRY_INTERVAL_SEC}s and retry')
                 util.wait(config.RPC_RETRY_INTERVAL_SEC, self.cond)
             count_block: int = latest - self.current + 1
@@ -262,13 +262,13 @@ class EventPoller(object):
                 for expected in self.events:
                     result: list[LogReceipt] | rpc.Error = self.connection.log_receipt(ChecksumAddress(self.contract), chunk[0], chunk[1], [expected.event_hash()])
                     while not self.off:
-                        if not rpc.IsError(result):
+                        if not rpc.is_error(result):
                             break
-                        log.error(self.tag, f'Failed to get logs for event {expected.event_hash().to_0x_hex()}, error: {result.msg}')
+                        log.error(self.tag, f'Failed to get logs for event {expected.event_hash().to_0x_hex()}, RPC error: {result.code.value}')
                         log.info(self.tag, f'Wait {config.RPC_RETRY_INTERVAL_SEC}s and retry')
                         util.wait(config.RPC_RETRY_INTERVAL_SEC, self.cond)
                         result = self.connection.log_receipt(ChecksumAddress(self.contract), chunk[0], chunk[1], [expected.event_hash()])
-                    if not rpc.IsError(result):
+                    if not rpc.is_error(result):
                         event_logs.extend(result if result is not None else [])
                     if self.off:
                         break
