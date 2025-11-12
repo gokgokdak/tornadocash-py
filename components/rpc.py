@@ -12,8 +12,8 @@ from web3.types import LogReceipt, Nonce, TxReceipt, TxParams, Wei
 import threading
 import traceback
 
-from mytype import ChainID, Key
-import log
+from . import log
+from .mytype import ChainID, Key
 
 
 class ErrorCode(Enum):

@@ -5,11 +5,9 @@ from hexbytes import HexBytes
 from web3 import Web3
 from web3.types import LogReceipt, Wei
 
+from . import log, rpc, util
+from .mytype import ChainID
 import config
-import log
-import rpc
-import util
-from mytype import ChainID
 
 
 class LogEvent(ABC):

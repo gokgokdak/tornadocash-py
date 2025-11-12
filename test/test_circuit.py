@@ -2,8 +2,8 @@ import unittest
 from web3 import Web3
 from web3.types import Wei
 
-import merkle_tree
-from mytype import CircuitInput, Note, MerkleProof
+from components import merkle_tree
+from components.mytype import CircuitInput, Note, MerkleProof
 from zk import circuit
 
 

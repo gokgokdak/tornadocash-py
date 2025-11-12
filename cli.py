@@ -7,15 +7,13 @@ from datetime import datetime
 from eth_typing import ChecksumAddress
 from hexbytes import HexBytes
 from web3 import Web3
-from web3.types import Nonce, TxReceipt
+from web3.types import TxReceipt
 
+from components import log, rpc, util
+from components.blockchain import EventDeposit, EventWithdraw
+from components.core import Tornado
+from components.mytype import ChainID, Key, Metadata, Note, Second, Symbol, TornadoUnit, chain_to_string, string_to_chain
 import config
-import log
-import rpc
-import util
-from blockchain import EventDeposit, EventWithdraw
-from core import Tornado
-from mytype import ChainID, Key, Metadata, Note, Second, Symbol, TornadoUnit, chain_to_string, string_to_chain
 
 
 tag: str = 'cli'

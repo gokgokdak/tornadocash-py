@@ -7,8 +7,8 @@ from enum import Enum
 from multiprocessing.synchronize import Lock as MPLock
 from typing import Any, TextIO
 
-import util
-from mytype import MBytes, Second
+from . import util
+from .mytype import MBytes, Second
 
 
 class Level(Enum):

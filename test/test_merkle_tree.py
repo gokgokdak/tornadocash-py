@@ -1,7 +1,7 @@
 import unittest
 from hexbytes import HexBytes
 
-import merkle_tree
+from components import merkle_tree
 
 
 class TestMerkleTree(unittest.TestCase):

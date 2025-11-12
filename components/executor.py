@@ -3,8 +3,8 @@ import threading
 import traceback
 from typing import Callable
 
-import log
-from mytype import Second
+from . import log
+from .mytype import Second
 
 
 class Job:

@@ -5,8 +5,8 @@ from iden3math import hash
 from iden3math import prime
 import threading
 
-import log
-from mytype import MerkleProof
+from . import log
+from .mytype import MerkleProof
 
 
 class ImplType(Enum):

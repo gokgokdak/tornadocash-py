@@ -5,12 +5,10 @@ from enum import Enum
 from hexbytes import HexBytes
 from typing import Any
 
-import blockchain
+from . import blockchain, log, util
+from .executor import Job, Queue
+from .mytype import ChainID, Metadata, Symbol, TornadoUnit
 import config
-import log
-import util
-from executor import Job, Queue
-from mytype import ChainID, Metadata, Symbol, TornadoUnit
 
 
 TABLE_STRUCTURE: dict = {
@@ -89,7 +87,8 @@ class Interface(object):
     @param  withdrawals     List of withdraw events, existing events (by tx_hash and nullifier_hash) will be ignored
     @return True if succeed, False otherwise
     '''
-    def add_synchronized(self, block_number: int, deposits: list[blockchain.EventDeposit], withdrawals: list[blockchain.EventWithdraw]) -> bool:
+    def add_synchronized(self, block_number: int, deposits: list[blockchain.EventDeposit], withdrawals: list[
+        blockchain.EventWithdraw]) -> bool:
         raise NotImplementedError
 
     '''
@@ -211,7 +210,8 @@ class SQLite(Interface):
                 return None
             return [HexBytes.fromhex(x[0][2:] if x[0].startswith('0x') else x[0]) for x in result]
 
-    def add_synchronized(self, block_number: int, deposits: list[blockchain.EventDeposit], withdrawals: list[blockchain.EventWithdraw]) -> bool:
+    def add_synchronized(self, block_number: int, deposits: list[blockchain.EventDeposit], withdrawals: list[
+        blockchain.EventWithdraw]) -> bool:
         sql: list[str] = [
             f'UPDATE t_info SET latest_blk_num = {block_number} WHERE latest_blk_num < {block_number};',
             f'UPDATE t_info SET unspent_count = unspent_count + {len(deposits)} - {len(withdrawals)};',

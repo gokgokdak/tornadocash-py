@@ -8,16 +8,12 @@ from web3 import Web3
 from web3.contract import Contract
 from web3.types import Nonce, Wei, TxParams
 
+from . import database, log, merkle_tree, rpc, util
+from .blockchain import EventPoller, EventDeposit, EventWithdraw
+from .mytype import ChainID, CircuitInput, Key, MerkleProof, Metadata, Note, Second, Symbol, TornadoUnit, SymbolType, chain_to_string
+from .util import get_symbol_type, unit_to_wei, wait
 import config
-import database
-import log
-import merkle_tree
-import rpc
-import util
 import zk
-from blockchain import EventPoller, EventDeposit, EventWithdraw
-from mytype import ChainID, CircuitInput, Key, MerkleProof, Metadata, Note, Second, Symbol, TornadoUnit, SymbolType, chain_to_string
-from util import get_symbol_type, unit_to_wei, wait
 
 
 class Tornado(EventPoller.Handler):

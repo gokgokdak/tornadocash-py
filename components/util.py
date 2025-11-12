@@ -7,8 +7,8 @@ import time
 from typing import Any, Callable
 from web3.types import Wei
 
+from .mytype import ChainID, Metadata, Second, Symbol, SymbolType, TornadoUnit, string_to_chain
 import config
-from mytype import ChainID, Metadata, Second, Symbol, SymbolType, TornadoUnit, string_to_chain
 
 
 def unix_timestamp() -> Second:

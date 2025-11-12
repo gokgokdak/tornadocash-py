@@ -6,8 +6,8 @@ from enum import Enum
 from hexbytes import HexBytes
 
 import config
-import log
-from mytype import CircuitInput
+from components import log
+from components.mytype import CircuitInput
 
 
 class ImplType(Enum):
