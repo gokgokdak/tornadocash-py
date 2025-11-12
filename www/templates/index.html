@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wallet Connect Demo</title>
+<style>
+    :root{
+        --brand:#2a64db;
+        --brand-2:#194aa9;
+        --bg:#f6f8fc;
+        --card:#ffffff;
+        --text:#0f172a;
+        --muted:#64748b;
+        --border:#e5e7eb;
+        --pos:#16a34a;
+        --neg:#dc2626;
+        --shadow:0 6px 16px rgba(15,23,42,.08);
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font:14px/1.55 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif;color:var(--text);background:var(--bg)}
+    a{color:inherit;text-decoration:none}
+
+    /* Top Navigation */
+    .topbar{position:sticky;top:0;z-index:10;background:linear-gradient(90deg,var(--brand),var(--brand-2));color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.12)}
+    .topwrap{max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:16px;padding:10px 16px}
+    .brand{font-weight:800;letter-spacing:.2px}
+    .badge{display:inline-block;border:1px solid rgba(255,255,255,.25);padding:3px 8px;border-radius:999px;font-size:12px;opacity:.95}
+    .spacer{flex:1}
+    .topnav a{padding:8px 10px;border-radius:8px}
+    .topnav a.active,.topnav a:hover{background:rgba(255,255,255,.12)}
+
+    /* Sub Tabs */
+    .subnav{background:#fff;border-bottom:1px solid var(--border)}
+    .subwrap{max-width:1100px;margin:0 auto;display:flex;gap:18px;padding:8px 16px}
+    .tab{position:relative;padding:10px 2px;color:#334155}
+    .tab.active{color:var(--brand);font-weight:700}
+    .tab.active::after{content:"";position:absolute;left:0;right:0;bottom:-9px;height:3px;background:var(--brand);border-radius:2px}
+
+    /* Containers and cards */
+    .wrap{max-width:1100px;margin:20px auto;padding:0 16px;display:grid;grid-template-columns:1.3fr .7fr;gap:16px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
+    .card-hd{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border)}
+    .card-ttl{font-weight:800}
+    .card-bd{padding:16px}
+    .hint{color:var(--muted)}
+    .btn{cursor:pointer;border:1px solid var(--border);background:#fff;padding:10px 14px;border-radius:10px;font-weight:700}
+    .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+    .btn:hover{filter:brightness(.98)}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .kv{display:flex;gap:8px;align-items:center}
+    .kv .k{color:var(--muted);min-width:88px}
+    .kv .v{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#fafbff;border:1px solid var(--border);padding:7px 9px;border-radius:8px;min-height:34px}
+
+    /* Right side information card */
+    .pill{display:inline-block;padding:3px 8px;border-radius:999px;border:1px solid var(--border);background:#f8fafc;font-size:12px}
+    .pill.pos{color:var(--pos);border-color:#bbf7d0;background:#f0fdf4}
+    .pill.neg{color:var(--neg);border-color:#fecaca;background:#fef2f2}
+    .list{display:grid;gap:8px}
+    .list .row{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px dashed var(--border)}
+    .list .row:last-child{border-bottom:0}
+
+    /* Table (Stylized) */
+    table{width:100%;border-collapse:separate;border-spacing:0 8px}
+    th{color:#334155;text-align:left;font-weight:700;padding:6px 8px}
+    td{background:#fff;border:1px solid var(--border);padding:10px 12px}
+    tr td:first-child{border-radius:8px 0 0 8px}
+    tr td:last-child{border-radius:0 8px 8px 0}
+    tr:hover td{box-shadow:var(--shadow)}
+
+    /* Modal: Wallet selection */
+    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center}
+    .modal{width:min(760px,92vw);background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow)}
+    .modal-hd{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border)}
+    .modal-ttl{font-weight:800}
+    .modal-bd{padding:14px}
+    .provgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin-top:10px}
+    .prov{display:flex;gap:10px;align-items:center;border:1px solid var(--border);background:#fff;border-radius:12px;padding:10px;cursor:pointer}
+    .prov:hover{border-color:#c7d2fe;box-shadow:var(--shadow)}
+    .prov img{width:28px;height:28px;border-radius:6px;background:#f1f5f9}
+    .prov .name{font-weight:800}
+    .prov .meta{font-size:12px;color:var(--muted)}
+</style>
+
+<body>
+<!-- Top Navigation -->
+<div class="topbar">
+    <div class="topwrap">
+        <div class="brand">Wallet Connect Demo</div>
+        <span class="badge">Demo</span>
+        <div class="spacer"></div>
+        <div class="topnav">
+            <a class="active" href="#">Wallets</a>
+            <a href="#">Activity</a>
+            <a href="#">Settings</a>
+        </div>
+    </div>
+</div>
+
+<!-- Sub Tabs -->
+<div class="subnav">
+    <div class="subwrap">
+        <a class="tab active" href="#">Overview</a>
+        <a class="tab" href="#">Connections</a>
+        <a class="tab" href="#">Providers</a>
+    </div>
+</div>
+
+<!-- Content -->
+<div class="wrap">
+    <!-- Left: Connect Wallet Card -->
+    <div class="card">
+        <div class="card-hd">
+            <div class="card-ttl">Connect Wallet</div>
+            <span class="pill">EIP-6963 + 1193 fallback</span>
+        </div>
+        <div class="card-bd">
+            <p class="hint">Click 「Select Provider」Pop out wallet selection window. After selection, it will request authorization and display address and chain.</p>
+            <div class="grid2" style="margin:12px 0 16px">
+                <button class="btn primary" id="selectBtn">Select Provider</button>
+                <button class="btn" id="refreshBtn">Refresh Providers</button>
+            </div>
+            <div class="kv"><div class="k">Chosen</div><div class="v" id="chosen">-</div></div>
+            <div class="kv" style="margin-top:8px"><div class="k">Address</div><div class="v" id="address">-</div></div>
+            <div class="kv" style="margin-top:8px"><div class="k">ChainId</div><div class="v" id="chain">-</div></div>
+
+            <h3 style="margin:18px 0 8px">Recent</h3>
+            <table>
+                <thead><tr><th>Time</th><th>Action</th><th>Details</th></tr></thead>
+                <tbody id="logTable">
+                <!-- Dynamic fill -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Right: Information Card -->
+    <div class="card">
+        <div class="card-hd">
+            <div class="card-ttl">Status</div>
+        </div>
+        <div class="card-bd">
+            <div class="list">
+                <div class="row"><span class="muted">Providers</span><span id="count" class="pill">0</span></div>
+                <div class="row"><span class="muted">MetaMask</span><span id="hasMM" class="pill neg">No</span></div>
+                <div class="row"><span class="muted">window.ethereum</span><span id="hasLegacy" class="pill neg">No</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Select Wallet -->
+<div class="overlay" id="overlay" role="dialog" aria-modal="true">
+    <div class="modal">
+        <div class="modal-hd">
+            <div class="modal-ttl">Select a wallet (EIP-6963)</div>
+            <button class="btn" id="closeModal">Close</button>
+        </div>
+        <div class="modal-bd">
+            <div class="hint" id="hint">Finding installed wallets…</div>
+            <div class="provgrid" id="provGrid"></div>
+            <div class="hint" style="margin-top:8px">Fallback to <code>window.ethereum</code> if no wallets found.</div>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    const $ = (id) => document.getElementById(id);
+    const chosenEl = $('chosen'), addrEl = $('address'), chainEl = $('chain');
+    const countEl = $('count'), hasMMEl = $('hasMM'), hasLegacyEl = $('hasLegacy');
+    const overlay = $('overlay'), provGrid = $('provGrid'), hint = $('hint');
+    const logTable = $('logTable');
+
+    const wait = (ms)=>new Promise(r=>setTimeout(r,ms));
+    const log = (action, details='')=>{
+        const tr = document.createElement('tr');
+        const now = new Date().toLocaleTimeString();
+        tr.innerHTML = `<td>${now}</td><td>${action}</td><td>${details}</td>`;
+        logTable.prepend(tr);
+    };
+
+    async function discover6963(timeout=600){
+        const found = new Map();
+        function onAnnounce(ev){
+            const {info, provider} = ev.detail||{};
+            if(!info || !provider) return;
+            if(!found.has(info.uuid)) found.set(info.uuid, {info, provider});
+        }
+        window.addEventListener('eip6963:announceProvider', onAnnounce);
+        window.dispatchEvent(new Event('eip6963:requestProvider'));
+        await wait(timeout);
+        window.removeEventListener('eip6963:announceProvider', onAnnounce);
+        return [...found.values()];
+    }
+    function fallback1193(){
+        const eth = window.ethereum;
+        if(!eth) return [];
+        return [{info:{uuid:'legacy',name:eth.isMetaMask?'MetaMask (legacy)':'window.ethereum',icon:'',rdns:'window'}, provider:eth}];
+    }
+
+    let providers = [];
+    let currentProvider = null;
+
+    async function refresh(){
+        providers = await discover6963();
+        if(!providers.length){
+            providers = fallback1193();
+            hint.textContent = providers.length ? 'EIP-6963 providers not found, fell back to window.ethereum' : 'No wallets found';
+        } else {
+            hint.textContent = `Found ${providers.length} wallets`;
+        }
+        countEl.textContent = String(providers.length);
+        hasLegacyEl.className = 'pill ' + (window.ethereum ? 'pos' : 'neg');
+        hasLegacyEl.textContent = window.ethereum ? 'Yes' : 'No';
+        hasMMEl.className = 'pill ' + (providers.some(p=>/metamask/i.test(p.info.name)) ? 'pos' : 'neg');
+        hasMMEl.textContent = providers.some(p=>/metamask/i.test(p.info.name)) ? 'Yes' : 'No';
+
+        provGrid.innerHTML = '';
+        for(const entry of providers){
+            const {info} = entry;
+            const card = document.createElement('div');
+            card.className = 'prov';
+            const img = document.createElement('img');
+            img.src = info.icon || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg"/>';
+            img.alt = '';
+            const box = document.createElement('div');
+            const name = document.createElement('div'); name.className='name'; name.textContent = info.name || 'Unknown';
+            const meta = document.createElement('div'); meta.className='meta'; meta.textContent = info.rdns || info.uuid || '';
+            box.append(name, meta);
+            card.append(img, box);
+            card.onclick = ()=>connect(entry);
+            provGrid.append(card);
+        }
+    }
+
+    async function connect(entry){
+        try{
+            const {info, provider} = entry;
+            currentProvider = provider;
+            await provider.request?.({method:'eth_requestAccounts'});
+            const [address] = await provider.request({method:'eth_accounts'});
+            const chainId = await provider.request({method:'eth_chainId'});
+
+            chosenEl.textContent = info?.name || 'Unknown';
+            addrEl.textContent = address || '(Unauthorized/No Account)';
+            chainEl.textContent = chainId || '-';
+            log('Connected', `${info?.name||'Unknown'} -> ${address||'-'}`);
+            if(provider.on){
+                provider.on('accountsChanged',(accs)=>{
+                    addrEl.textContent = (accs && accs[0]) ? accs[0] : '(Unauthorized/No Account)';
+                    log('accountsChanged', addrEl.textContent);
+                });
+                provider.on('chainChanged',(cid)=>{
+                    chainEl.textContent = cid;
+                    log('chainChanged', cid);
+                });
+            }
+            overlay.style.display='none';
+        }catch(e){
+            alert('Connection failed: ' + (e?.message||e));
+            log('Error', e?.message||String(e));
+        }
+    }
+
+    // UI Interactions
+    $('selectBtn').onclick = ()=>{ overlay.style.display='flex'; refresh(); };
+    $('refreshBtn').onclick = ()=>{ refresh(); };
+    $('closeModal').onclick = ()=>{ overlay.style.display='none'; };
+
+    // English: Do a discovery on first load to improve success rate
+    window.dispatchEvent(new Event('eip6963:requestProvider'));
+    refresh();
+</script>
+</body>
+</html>
