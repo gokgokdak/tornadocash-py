@@ -84,3 +84,5 @@ TORNADO_PROXY_ABI_PATH: str = os.path.join(os.path.dirname(__file__), 'abi/torna
 ERC20_ABI_PATH: str = os.path.join(os.path.dirname(__file__), 'abi/erc20.json').replace('\\', '/')
 
 BACKUP_DIR: str = os.path.join(os.path.dirname(__file__), 'backup').replace('\\', '/')
+
+WEBUI_ROOT: str = os.path.join(os.path.dirname(__file__), 'www').replace('\\', '/')
