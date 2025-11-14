@@ -554,7 +554,7 @@ def deposit_batch(key: Key, batch: str) -> None:
                     while True:
                         receipt: TxReceipt | rpc.Error = connections[chain].transaction_receipt(tx_hash)
                         if rpc.is_error(receipt):
-                            log.warn(tag, f'Wait 5 seconds for deposit transaction to be mined, RPC error: \"{receipt.code.value}\"')
+                            log.warn(tag, f'Wait 5 seconds for deposit transaction to be mined, RPC error: {receipt.code.value}')
                             util.wait(Second(5))
                             continue
                         if receipt is not None and receipt['blockNumber'] is not None:
@@ -640,7 +640,7 @@ def withdraw_batch(notes_text: str, recipient: ChecksumAddress, key_or_relayer: 
                     while True:
                         receipt: TxReceipt | rpc.Error = connections[chain].transaction_receipt(tx_hash)
                         if rpc.is_error(receipt):
-                            log.warn(tag, f'Wait 5 seconds for withdrawal transaction to be mined, RPC error: \"{receipt.code.value}\"')
+                            log.warn(tag, f'Wait 5 seconds for withdrawal transaction to be mined, RPC error: {receipt.code.value}')
                             util.wait(Second(5))
                             continue
                         if receipt is not None and receipt['blockNumber'] is not None:

@@ -182,79 +182,83 @@ class Tornado(EventPoller.Handler):
     def note_age(self, commitment: HexBytes) -> tuple[int, int] | None:
         return self.db.note_age(commitment)
 
-    # Deposit
-    # @param    commitment  The commitment of the note to deposit
-    # @param    key         The private key to make the deposit
-    # @return   HexBytes of transaction hash on success, None if failed
-    def deposit(self, commitment: HexBytes, key: Key) -> HexBytes | None:
-        # Check if the note has already been deposited
-        deposited: bool | None = self.note_deposited(commitment)
-        if deposited is None:
-            return None
-        elif deposited:
-            log.error(self.tag, f'deposit(from={key.eth_address()}), note commitment already deposited: {commitment.to_0x_hex()}')
-            return None
-        wait(Second(0.5))  # Prevent RPC rate limit
-
-        # Get nonce
-        nonce: Nonce | rpc.Error = self.connection.nonce(key.eth_address())
-        if rpc.is_error(nonce):
-            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to get nonce, RPC error: {nonce.code.value}')
-            return None
-
-        # Allowance for ERC20 token
-        if SymbolType.ERC20 == get_symbol_type(self.symbol):
-            # Check allowance
-            allowance: int | rpc.Error = rpc.contract_call(self.token_contract, 'allowance', key.eth_address(), self.proxy_address)
-            if rpc.is_error(allowance):
-                log.error(self.tag, f'deposit(from={key.eth_address()}), failed to call contract function allowance(address,address), RPC error: {allowance.code.value}')
+    # Create unsigned approve transaction of 'self.unit' amounts of tokens for deposit
+    # @param    address     The address to make the approval, must use the corresponding private key to sign the transaction
+    # @param    nonce       The nonce of the address, if None, will be queried from the blockchain
+    # @return   TxParams of the unsigned transaction on success, None if failed
+    def approve_tx(self, address: ChecksumAddress, nonce: Nonce | rpc.Error | None = None) -> TxParams | None:
+        if nonce is None:
+            nonce = self.connection.nonce(address)
+            if rpc.is_error(nonce):
+                log.error(self.tag, f'approve_tx(), failed to get nonce, RPC error: {nonce.code.value}')
                 return None
-            if allowance < unit_to_wei(self.unit, self.meta.decimals[self.symbol]):
-                # Call contract approve() to build transaction
-                tx: TxParams = {
-                    'from'   : key.eth_address(),
-                    'chainId': self.chain.value,
-                    'nonce'  : Nonce(nonce),
-                }
-                built_tx: TxParams | rpc.Error = rpc.contract_build_tx(
-                    self.token_contract, 'approve', tx,
-                    self.proxy_address, unit_to_wei(self.unit, self.meta.decimals[self.symbol])
-                )
-                if rpc.is_error(built_tx):
-                    log.error(self.tag, f'deposit(from={key.eth_address()}), approve tokens, failed to build transaction, RPC error: {built_tx.code.value}')
-                    return None
-                # Sign
-                signed_tx: SignedTransaction | rpc.Error = self.connection.sign_transaction(built_tx, key)
-                if rpc.is_error(signed_tx):
-                    log.error(self.tag, f'deposit(from={key.eth_address()}), approve tokens, failed to sign transaction, RPC error: {signed_tx.code.value}')
-                    return None
-                # Send
-                tx_hash: HexBytes | rpc.Error = self.connection.send_transaction(signed_tx)
-                if rpc.is_error(tx_hash):
-                    log.error(self.tag, f'deposit(from={key.eth_address()}), approve tokens, failed to send transaction, RPC error: {tx_hash.code.value}')
-                    return None
-                # Increase nonce
-                nonce += 1
-                # Wait for the allowance to be updated
-                max_waits: int = 30
-                counter  : int = 0
-                while True:
-                    counter += 1
-                    allowance = rpc.contract_call(self.token_contract, 'allowance', key.eth_address(), self.proxy_address)
-                    if rpc.is_error(allowance):
-                        log.error(self.tag, f'deposit(from={key.eth_address()}), approve tokens, failed to call contract function allowance(address,address), RPC error: {allowance.code.value}')
-                        return None
-                    if allowance >= unit_to_wei(self.unit, self.meta.decimals[self.symbol]):
-                        break
-                    if counter >= max_waits:
-                        log.error(self.tag, f'deposit(from={key.eth_address()}), approve tokens, timeout waiting for allowance to be updated')
-                        return None
-                    log.info(self.tag, f'deposit(from={key.eth_address()}), approve tokens, waiting for allowance to be updated...')
-                    wait(Second(2))
-
-        # Call contract deposit() to build transaction
         tx: TxParams = {
-            'from'   : key.eth_address(),
+            'from'   : address,
+            'chainId': self.chain.value,
+            'nonce'  : Nonce(nonce),
+        }
+        built_tx: TxParams | rpc.Error = rpc.contract_build_tx(
+            self.token_contract, 'approve', tx,
+            self.proxy_address, unit_to_wei(self.unit, self.meta.decimals[self.symbol])
+        )
+        if rpc.is_error(built_tx):
+            log.error(self.tag, f'approve_tx(), failed to build transaction, RPC error: {built_tx.code.value}')
+            return None
+        return built_tx
+
+    # Approve 'self.unit' amounts of tokens for deposit
+    # @param    key     The private key to make the approval
+    # @param    nonce   The nonce of the address, if None, will be queried from the blockchain
+    # @return   HexBytes of transaction hash on success, None if failed
+    def approve(self, key: Key, nonce: Nonce | rpc.Error | None = None) -> HexBytes | None:
+        if nonce is None:
+            nonce = self.connection.nonce(key.eth_address())
+            if rpc.is_error(nonce):
+                log.error(self.tag, f'approve(), failed to get nonce, RPC error: {nonce.code.value}')
+                return None
+        # Build
+        built_tx: TxParams | None = self.approve_tx(key.eth_address(), nonce)
+        # Sign
+        signed_tx: SignedTransaction | rpc.Error = self.connection.sign_transaction(built_tx, key)
+        if rpc.is_error(signed_tx):
+            log.error(self.tag, f'approve(), failed to sign transaction, RPC error: {signed_tx.code.value}')
+            return None
+        # Send
+        tx_hash: HexBytes | rpc.Error = self.connection.send_transaction(signed_tx)
+        if rpc.is_error(tx_hash):
+            log.error(self.tag, f'approve(), failed to send transaction, RPC error: {tx_hash.code.value}')
+            return None
+        # Wait for the allowance to be updated
+        max_waits: int = 30
+        counter  : int = 0
+        while True:
+            counter += 1
+            allowance = rpc.contract_call(self.token_contract, 'allowance', key.eth_address(), self.proxy_address)
+            if rpc.is_error(allowance):
+                log.error(self.tag, f'approve(), failed to call contract function allowance(address,address), RPC error: {allowance.code.value}')
+                return None
+            if allowance >= unit_to_wei(self.unit, self.meta.decimals[self.symbol]):
+                break
+            if counter >= max_waits:
+                log.error(self.tag, f'approve(), timeout waiting for allowance to be updated')
+                return None
+            log.info(self.tag, f'approve(), waiting for allowance to be updated...')
+            wait(Second(2))
+        return tx_hash
+
+    # Create unsigned deposit transaction
+    # @param    commitment      The commitment of the note to deposit
+    # @param    from_address    The address to make the deposit, must use the corresponding private key to sign the transaction
+    # @param    nonce           The nonce of the from_address, if None, will be queried from the blockchain
+    # @return   TxParams of the unsigned transaction on success, None if failed
+    def deposit_tx(self, commitment: HexBytes, from_address: ChecksumAddress, nonce: Nonce | rpc.Error | None = None) -> TxParams | None:
+        if nonce is None:
+            nonce = self.connection.nonce(from_address)
+            if rpc.is_error(nonce):
+                log.error(self.tag, f'deposit_tx(from={from_address}), failed to get nonce, RPC error: {nonce.code.value}')
+                return None
+        tx: TxParams = {
+            'from'   : from_address,
             'chainId': self.chain.value,
             'nonce'  : Nonce(nonce),
         }
@@ -262,7 +266,38 @@ class Tornado(EventPoller.Handler):
             tx['value'] = unit_to_wei(self.unit, self.meta.decimals[self.symbol])
         built_tx: TxParams | rpc.Error = rpc.contract_build_tx(self.proxy_contract, 'deposit', tx, self.deployment_address, commitment, b'')
         if rpc.is_error(built_tx):
-            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to build transaction, RPC error: {built_tx.code.value}')
+            log.error(self.tag, f'deposit_tx(from={from_address}), failed to build transaction, RPC error: {built_tx.code.value}')
+            return None
+        return built_tx
+
+    # Deposit
+    # @param    commitment  The commitment of the note to deposit
+    # @param    key         The private key to make the deposit
+    # @param    nonce       The nonce of the from_address, if None, will be queried from the blockchain
+    # @return   HexBytes of transaction hash on success, None if failed
+    def deposit(self, commitment: HexBytes, key: Key, nonce: Nonce | rpc.Error | None = None) -> HexBytes | None:
+        if nonce is None:
+            nonce = self.connection.nonce(key.eth_address())
+            if rpc.is_error(nonce):
+                log.error(self.tag, f'deposit(from={key.eth_address()}), failed to get nonce, RPC error: {nonce.code.value}')
+                return None
+        # Allowance for ERC20 token
+        if SymbolType.ERC20 == get_symbol_type(self.symbol):
+            # Check allowance
+            allowance: int | rpc.Error = rpc.contract_call(self.token_contract, 'allowance', key.eth_address(), self.proxy_address)
+            if rpc.is_error(allowance):
+                log.error(self.tag, f'deposit(from={key.eth_address()}), failed to call contract function allowance(address,address), RPC error: {allowance.code.value}')
+                return None
+            # Approve if not enough
+            if allowance < unit_to_wei(self.unit, self.meta.decimals[self.symbol]):
+                tx_hash: HexBytes | None = self.approve(key, nonce)
+                if tx_hash is None:
+                    return None
+            # Increase nonce manually
+            nonce += 1
+        # Build
+        built_tx: TxParams | None = self.deposit_tx(commitment, key.eth_address(), nonce)
+        if built_tx is None:
             return None
         # Sign
         signed_tx: SignedTransaction | rpc.Error = self.connection.sign_transaction(built_tx, key)
@@ -277,13 +312,62 @@ class Tornado(EventPoller.Handler):
         log.info(self.tag, f'Deposit {self.unit.value} {self.symbol.value.upper()} succeed, tx hash: {tx_hash.hex()}', log.Color.CYAN, log.Style.BOLD)
         return tx_hash
 
+    # Create unsigned withdraw transaction
+    # @param    note            The note to withdraw
+    # @param    withdrawer      The address to make the withdrawal, must use the corresponding private key to sign the transaction
+    # @param    recipient       Address to receive the withdrawal
+    # @param    merkle_proof    The merkle proof of the note
+    # @param    zk_proof        The zk-SNARK proof of the note
+    # @param    nonce           The nonce of the withdrawer address, if None, will be queried from the blockchain
+    # @param    refund          Amount to send to the recipient
+    # @return   TxParams of the unsigned transaction on success, None if failed
+    def withdraw_tx(self,
+                    note: Note,
+                    withdrawer: ChecksumAddress,
+                    recipient: ChecksumAddress,
+                    merkle_proof: MerkleProof,
+                    zk_proof: dict,
+                    nonce: Nonce | rpc.Error | None = None,
+                    refund: Wei = Wei(0)) -> TxParams | None:
+        if nonce is None:
+            nonce = self.connection.nonce(withdrawer)
+            if rpc.is_error(nonce):
+                log.error(self.tag, f'withdraw_tx(withdrawer={withdrawer}, recipient={recipient}), failed to get withdrawer nonce, RPC error: {nonce.code.value}')
+                return None
+        tx: TxParams = {
+            'from'   : withdrawer,
+            'chainId': self.chain.value,
+            'nonce'  : Nonce(nonce),
+        }
+        built_tx: TxParams | rpc.Error = rpc.contract_build_tx(
+            self.proxy_contract, 'withdraw', tx,
+            self.deployment_address,
+            HexBytes.fromhex(zk_proof['solidity']['proof'][2:] if zk_proof['solidity']['proof'].startswith('0x') else zk_proof['solidity']['proof']),
+            merkle_proof.root,
+            note.nullifier_hash,
+            recipient,
+            Web3.to_checksum_address('0x0000000000000000000000000000000000000000'),  # Relayer address
+            Wei(0),  # Relayer fee
+            refund,
+        )
+        if rpc.is_error(built_tx):
+            log.error(self.tag, f'withdraw_tx(withdrawer={withdrawer}, recipient={recipient}), failed to build transaction, RPC error: {built_tx.code.value}')
+            return None
+        return built_tx
+
     # Withdraw
     # @param    note            The note to withdraw
     # @param    recipient       Address to receive the withdrawal
     # @param    key_or_relayer  The private key to pay the gas fee, or the URL of the relayer
+    # @param    nonce           The nonce of the withdrawer address, if None and not using relayer, will be queried from the blockchain
     # @param    refund          Amount to send to the recipient, make sure the `key_or_relayer` is a key and has enough balance
     # @return   HexBytes of transaction hash on success, None if failed or sync-only mode
-    def withdraw(self, note: Note, recipient: ChecksumAddress, key_or_relayer: Key | str, refund: Wei = Wei(0)) -> HexBytes | None:
+    def withdraw(self,
+                 note: Note,
+                 recipient: ChecksumAddress,
+                 key_or_relayer: Key | str,
+                 nonce: Nonce | rpc.Error | None = None,
+                 refund: Wei = Wei(0)) -> HexBytes | None:
         if self.sync_only:
             log.error(self.tag, f'withdraw(to={recipient}), not available in sync-only mode')
             return None
@@ -298,15 +382,6 @@ class Tornado(EventPoller.Handler):
             return None
         use_relayer: bool = relayer_url is not None and relayer_url.startswith('http')
         total_wei  : Wei  = unit_to_wei(self.unit, self.meta.decimals[self.symbol])
-
-        # Check if the note has already been withdrawn
-        withdrawn: bool | None = self.note_withdrawn(note.nullifier_hash)
-        if withdrawn is None:
-            return None
-        elif withdrawn:
-            log.error(self.tag, f'withdraw(to={recipient}), note nullifier hash already withdrawn: {note.nullifier_hash.to_0x_hex()}')
-            return None
-        wait(Second(0.5))  # Prevent RPC rate limit
 
         relayer_address   : ChecksumAddress    = Web3.to_checksum_address('0x0000000000000000000000000000000000000000')
         relayer_eth_prices: dict[Symbol, Wei]  = {}
@@ -397,12 +472,12 @@ class Tornado(EventPoller.Handler):
             refund=refund
         )
         # Prove
-        proof: dict | None = self.zksnark.prove(circuit_input)
-        if proof is None:
+        zk_proof: dict | None = self.zksnark.prove(circuit_input)
+        if zk_proof is None:
             log.error(self.tag, f'withdraw(to={recipient}), failed to prove for commitment: {note.commitment.to_0x_hex()}')
             return None
-        # Verify
-        if not self.zksnark.verify(proof):
+        # Verify test
+        if not self.zksnark.verify(zk_proof):
             log.error(self.tag, f'withdraw(to={recipient}), failed to test verify proof for commitment: {note.commitment.to_0x_hex()}')
             return None
         log.info(self.tag, f'Proof generated for commitment: {note.commitment.to_0x_hex()}')
@@ -415,14 +490,14 @@ class Tornado(EventPoller.Handler):
                     url=relayer_url.rstrip('/') + '/v1/tornadoWithdraw',
                     json={
                         'contract': self.deployment_address,
-                        'proof': proof['solidity']['proof'],
+                        'proof': zk_proof['solidity']['proof'],
                         'args': [
-                            proof['solidity']['publicSignals'][0],  # root
-                            proof['solidity']['publicSignals'][1],  # nullifierHash
-                            recipient,                              # recipient address
-                            relayer_address,                        # relayer address
-                            proof['solidity']['publicSignals'][4],  # fee
-                            proof['solidity']['publicSignals'][5],  # refund
+                            zk_proof['solidity']['publicSignals'][0],  # root
+                            zk_proof['solidity']['publicSignals'][1],  # nullifierHash
+                            recipient,                                 # recipient address
+                            relayer_address,                           # relayer address
+                            zk_proof['solidity']['publicSignals'][4],  # fee
+                            zk_proof['solidity']['publicSignals'][5],  # refund
                         ]
                     }
                 )
@@ -491,39 +566,25 @@ class Tornado(EventPoller.Handler):
                     return recursive_query()
             return recursive_query()
 
-        # Make withdrawal directly
-        nonce: Nonce | rpc.Error = self.connection.nonce(key.eth_address())
-        if rpc.is_error(nonce):
-            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to get nonce, RPC error: {nonce.code.value}')
-            return None
-        tx: TxParams = {
-            'from'   : key.eth_address(),
-            'chainId': self.chain.value,
-            'nonce'  : Nonce(nonce),
-        }
-        built_tx: TxParams | rpc.Error = rpc.contract_build_tx(
-            self.proxy_contract, 'withdraw', tx,
-            self.deployment_address,
-            HexBytes.fromhex(proof['solidity']['proof'][2:] if proof['solidity']['proof'].startswith('0x') else proof['solidity']['proof']),
-            merkle_proof.root,
-            note.nullifier_hash,
-            recipient,
-            relayer_address,
-            relayer_fee,
-            refund,
-        )
-        if rpc.is_error(built_tx):
-            log.error(self.tag, f'withdraw(to={recipient}), failed to build transaction, RPC error: {built_tx.code.value}')
+        # Otherwise, make withdrawal directly
+        if nonce is None:
+            nonce = self.connection.nonce(key.eth_address())
+            if rpc.is_error(nonce):
+                log.error(self.tag, f'withdraw(withdrawer={key.eth_address()}, recipient={recipient}), failed to get withdrawer nonce, RPC error: {nonce.code.value}')
+                return None
+        # Build
+        built_tx: TxParams | None = self.withdraw_tx(note, key.eth_address(), recipient, merkle_proof, zk_proof, nonce, refund)
+        if built_tx is None:
             return None
         # Sign
         signed_tx: SignedTransaction | rpc.Error = self.connection.sign_transaction(built_tx, key)
         if rpc.is_error(signed_tx):
-            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to sign transaction, RPC error: {signed_tx.code.value}')
+            log.error(self.tag, f'withdraw(withdrawer={key.eth_address()}, recipient={recipient}), failed to sign transaction, RPC error: {signed_tx.code.value}')
             return None
         # Send
         tx_hash: HexBytes | rpc.Error = self.connection.send_transaction(signed_tx)
         if rpc.is_error(tx_hash):
-            log.error(self.tag, f'deposit(from={key.eth_address()}), failed to send transaction, RPC error: {tx_hash.code.value}')
+            log.error(self.tag, f'withdraw(withdrawer={key.eth_address()}, recipient={recipient}), failed to send transaction, RPC error: {tx_hash.code.value}')
             return None
         log.info(self.tag, f'Withdraw {self.unit.value} {self.symbol.value.upper()} succeed, tx hash: {tx_hash.to_0x_hex()}')
         return tx_hash
