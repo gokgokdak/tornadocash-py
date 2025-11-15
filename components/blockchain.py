@@ -6,7 +6,8 @@ from web3 import Web3
 from web3.types import LogReceipt, Wei
 
 from . import log, rpc, util
-from .mytype import ChainID
+from .mytype import ChainID, chain_to_string
+from .util import upper_first_char
 import config
 
 
@@ -150,7 +151,7 @@ class EventPoller(object):
             pass
 
     def __init__(self, chain: ChainID, connection: rpc.Interface | None = None) -> None:
-        self.tag        : str                       = f'{__class__.__name__}'
+        self.tag        : str                       = f'{__class__.__name__}@{upper_first_char(chain_to_string(chain))}'
         self.off        : bool                      = True
         self.chain      : ChainID                   = chain
         self.connection : rpc.Interface | None      = connection  # If True, the RPC connection is managed outside
