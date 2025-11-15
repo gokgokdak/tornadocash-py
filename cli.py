@@ -435,7 +435,7 @@ def _deposit(key: Key, tornado: Tornado, invoice: HexBytes | None = None) -> Hex
         note      : Note | None = None
         commitment: HexBytes    = invoice
     # Save the note to a file
-    filename   : str = f'{datetime.now().strftime('%Y-%m-%d_%H.%M.%S.%f')[:-3]}_{chain_to_string(tornado.chain)}_{tornado.symbol.value}_{tornado.unit.value}.txt'
+    filename   : str = f'{datetime.now().strftime("%Y-%m-%d_%H.%M.%S.%f")[:-3]}_{chain_to_string(tornado.chain)}_{tornado.symbol.value}_{tornado.unit.value}.txt'
     backup_path: str = os.path.join(config.BACKUP_DIR, filename).replace('\\', '/')
     if note is not None:
         try:
@@ -657,7 +657,7 @@ def create_note(chain: ChainID, symbol: Symbol, unit: TornadoUnit) -> None:
     backup_str : str  = Note.to_text(chain, symbol, unit, note)
     invoice_str: str  = Note.to_invoice(chain, symbol, unit, note)
     # Save backup
-    filename   : str = f'{datetime.now().strftime('%Y-%m-%d_%H.%M.%S.%f')[:-3]}_{chain_to_string(chain)}_{symbol.value}_{unit.value}.txt'
+    filename   : str = f'{datetime.now().strftime("%Y-%m-%d_%H.%M.%S.%f")[:-3]}_{chain_to_string(chain)}_{symbol.value}_{unit.value}.txt'
     backup_path: str = os.path.join(config.BACKUP_DIR, filename).replace('\\', '/')
     try:
         if not os.path.exists(config.BACKUP_DIR):
