@@ -22,6 +22,8 @@ class ErrorCode(Enum):
     RPC_CALL_RATE_LIMIT = 'RPC_CALL_RATE_LIMIT'
     SSL_ERROR           = 'SSL_ERROR'
     CONNECTION_ABORTED  = 'CONNECTION_ABORTED'
+    SERVER_ERROR_504    = 'SERVER_ERROR_504'
+    GATEWAY_TIMEOUT     = 'GATEWAY_TIMEOUT'
     NONCE_TOO_LOW       = 'NONCE_TOO_LOW'
     TX_HASH_NOT_FOUND   = 'TX_HASH_NOT_FOUND'
     MAX_FEE_TOO_LOW     = 'MAX_FEE_LESS_THAN_BASE'
@@ -52,6 +54,10 @@ def parse_exception_to_error_code(e: Exception) -> ErrorCode:
         return ErrorCode.SSL_ERROR
     elif all(key in text for key in ['connection', 'abort']):
         return ErrorCode.CONNECTION_ABORTED
+    elif any(key in text for key in ['504', 'server', 'error']):
+        return ErrorCode.SERVER_ERROR_504
+    elif any(key in text for key in ['gateway', 'timeout']):
+        return ErrorCode.GATEWAY_TIMEOUT
     elif all(key in text for key in ['nonce', 'low']):
         return ErrorCode.NONCE_TOO_LOW
     elif all(key in text for key in ['transaction', 'hash', 'not found']):
