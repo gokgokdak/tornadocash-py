@@ -74,6 +74,11 @@ class Tornado(EventPoller.Handler):
         if rpc.is_error(self.token_contract):
             raise RuntimeError(f'Failed to get token contract instance, RPC error: {self.deployment_contract.code.value}')
 
+    def __del__(self):
+        if not self.external:
+            if self.connection.started():
+                self.connection.stop()
+
     '''
     Initialize Tornado instance
     @param  sync_only   If True, only sync events without rebuilding the merkle tree, 'withdraw()' will not be available
