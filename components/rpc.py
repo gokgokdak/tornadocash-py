@@ -29,6 +29,7 @@ class ErrorCode(Enum):
     MAX_FEE_TOO_LOW     = 'MAX_FEE_LESS_THAN_BASE'
     INSUFFICIENT_FUNDS  = 'INSUFFICIENT_FUNDS'
     REPLACE_UNDERPRICE  = 'REPLACE_UNDERPRICE'
+    ADDRESS_SANCTIONED  = 'ADDRESS_SANCTIONED'
     EXECUTION_REVERTED  = 'EXECUTION_REVERTED'
 
 
@@ -68,6 +69,8 @@ def parse_exception_to_error_code(e: Exception) -> ErrorCode:
         return ErrorCode.INSUFFICIENT_FUNDS
     elif all(key in text for key in ['replace', 'underprice']):
         return ErrorCode.REPLACE_UNDERPRICE
+    elif any(key in text for key in ['sanction', 'sanctioned', 'blacklist']):
+        return ErrorCode.ADDRESS_SANCTIONED
     elif all(key in text for key in ['execution', 'reverted']):
         return ErrorCode.EXECUTION_REVERTED
     return ErrorCode.UNKNOWN
