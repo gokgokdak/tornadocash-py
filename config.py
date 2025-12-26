@@ -36,10 +36,11 @@ BLOCKCHAIN_LOG_EVENT_POLL_BLOCKS_PER_REQUEST: dict[ChainID, int] = {
     ChainID.SEPOLIA  : 10000,
 }
 
-# Use Node.js runtime bundled in './zk/bin/' directory
-# Change to `False` if you want to force using system-installed Node.js
-# If `False`, please make sure command `node` is available in your PATH environment
-# If `True`, will try the system-installed Node.js first, if not found, will use the bundled one
+# Specify Node.js runtime
+# True: Will try to use the Node.js runtime on your machine if found,
+#       Please make sure command `node` is available in your PATH environment.
+#       Otherwise, use the bundled binary under the `./zk/bin/` directory.
+# False: Only the bundled binary under the `./zk/bin/` directory will be used.
 BUNDLED_NODE_JS: bool = True
 
 # Relayer fee rate in percentage, e.g., '1.8' means 1.8%
