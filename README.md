@@ -90,11 +90,9 @@ Or, sync all deployments:
 
 It is recommended to keep the program running to stay synchronized with the blockchain, simply add a `--keep` option to `--sync` or `--sync_all` command.  
 
-### RPC Service (Optional)
+### RPC Service
 
-For blockchain interaction, `publicnode.com` was used as the default RPC provider, technically it should be enough for most users.  
-
-For better experience or if you want to set up your own RPC provider, replace the `RPC_URLS` variable in `config.py` with your own endpoint.  
+If RPC error `ADDRESS_SANCTIONED` occurs during deposit or withdrawal, or any RPC errors during the syncing process, please change to another RPC provider manually, replace the `RPC_URLS` variable in `config.py` with your own endpoint.  
 
 ![](/assets/readme_rpc.png)
 
@@ -103,7 +101,10 @@ For better experience or if you want to set up your own RPC provider, replace th
 
 Node.js runtime is required, version 14 or above is recommended.  
 
-By default, it uses Node.js binary runtime bundled in the `./zk/bin` directory, to use your local  Node.js, please set the `BUNDLED_NODE_JS` variable to `False` in `config.py`, and make sure the `node` command is available in your system PATH.
+Setup boolean variable `BUNDLED_NODE_JS` to specify the runtime.  
+
+If `True`, will try to use the Node.js runtime on your machine if found, please make sure command `node` is available in your PATH environment, otherwise use the bundled binary under the `./zk/bin/` directory.  
+If `False`, only the bundled binary under the `./zk/bin/` directory will be used.  
 
 ![](/assets/readme_nodejs.png)
 
