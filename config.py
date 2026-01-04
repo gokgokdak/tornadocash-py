@@ -8,7 +8,7 @@ from components.mytype import ChainID, Second, Symbol, TornadoUnit, chain_to_str
 
 # RPC URLs for different chains, modify as needed
 RPC_URLS: dict[ChainID, str] = {
-    ChainID.ETHEREUM : 'https://ethereum-rpc.publicnode.com',
+    ChainID.ETHEREUM : 'https://1rpc.io/eth',
     ChainID.OPTIMISM : 'https://optimism-rpc.publicnode.com',
     ChainID.BSC      : 'https://public-bsc-mainnet.fastnode.io',
     ChainID.POLYGON  : 'https://polygon.drpc.org',
