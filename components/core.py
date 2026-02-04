@@ -97,7 +97,7 @@ class Tornado(EventPoller.Handler):
             return False
         # Open database
         if not self.db.open(self.chain, self.symbol, self.unit):
-            log.error(f'Opening database failed for {self.chain}_{self.unit}{self.symbol}')
+            log.error(self.tag, f'Opening database failed for {self.chain}_{self.unit}{self.symbol}')
             return False
         # Check integrity
         if not self.db.check_integrity():

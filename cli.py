@@ -273,7 +273,7 @@ def handle_option(enabled_arg: str, args: argparse.Namespace) -> None:
     elif enabled_arg == 'note_detail':
         parsed: tuple[ChainID, Symbol, TornadoUnit, Note] | None = Note.from_text(str(args.note_detail))
         if parsed is None:
-            log.error(f'Failed to parse note: "{args.note_detail}"')
+            log.error(tag, f'Failed to parse note: "{args.note_detail}"')
             return
         chain, symbol, unit, note = parsed
         log.info(tag, f'Note detail:\n'
@@ -570,7 +570,7 @@ def deposit_batch(key: Key, batch: str) -> None:
 def withdraw(note_text: str, recipient: ChecksumAddress, key_or_relayer: Key | str) -> None:
     parsed: tuple[ChainID, Symbol, TornadoUnit, Note] | None = Note.from_text(note_text)
     if parsed is None:
-        log.error(f'Failed to parse note: "{note_text}"')
+        log.error(tag, f'Failed to parse note: "{note_text}"')
         return
     chain, symbol, unit, note = parsed
     tornado: Tornado = Tornado(chain, symbol, unit)
@@ -591,7 +591,7 @@ def withdraw_batch(notes_text: str, recipient: ChecksumAddress, key_or_relayer: 
     for text in texts:
         p: tuple[ChainID, Symbol, TornadoUnit, Note] | None = Note.from_text(text)
         if p is None:
-            log.error(f'Failed to parse note: "{text}"')
+            log.error(tag, f'Failed to parse note: "{text}"')
             return
         chain, symbol, unit, note = p
         if chain not in parsed:
@@ -692,7 +692,7 @@ def note_deposited(note_or_invoice: str) -> None:
     if parsed is None:
         parsed = Note.from_invoice(note_or_invoice)
         if parsed is None:
-            log.error(f'Failed to parse note: "{note_or_invoice}"')
+            log.error(tag, f'Failed to parse note: "{note_or_invoice}"')
             return
     chain, symbol, unit, note_or_commitment = parsed
     if isinstance(note_or_commitment, Note):
@@ -739,7 +739,7 @@ def note_age(note_or_invoice: str) -> None:
     if parsed is None:  # Not a note, try to parse as invoice
         parsed = Note.from_invoice(note_or_invoice)
         if parsed is None:
-            log.error(f'Failed to parse note or invoice: "{note_or_invoice}"')
+            log.error(tag, f'Failed to parse note or invoice: "{note_or_invoice}"')
             return
     chain, symbol, unit, note_or_commitment = parsed
     tornado: Tornado = Tornado(chain, symbol, unit)
