@@ -681,8 +681,9 @@ def create_note(chain: ChainID, symbol: Symbol, unit: TornadoUnit) -> None:
     # Print note text and invoice
     log.info(tag, f'Scan the QR code to transfer the invoice to online machine', log.Color.YELLOW, log.Style.BOLD)
     log.info(tag, f'IMPORTANT: Please save the note text below and keep it private', log.Color.YELLOW, log.Style.BOLD)
-    log.info(tag, f'Note     : {backup_str}', log.Color.YELLOW, log.Style.BOLD)
-    log.info(tag, f'Invoice  : {invoice_str}', log.Color.YELLOW, log.Style.BOLD)
+    log.info(tag, f'Note         : {backup_str}', log.Color.YELLOW, log.Style.BOLD)
+    log.info(tag, f'Invoice      : {invoice_str}', log.Color.YELLOW, log.Style.BOLD)
+    log.info(tag, f'NullifierHash: 0x{note.nullifier_hash.hex().zfill(64)}', log.Color.YELLOW, log.Style.BOLD)
     log.info(tag, f'IMPORTANT: Note backup saved to {backup_path}', log.Color.YELLOW, log.Style.BOLD)
 
 
