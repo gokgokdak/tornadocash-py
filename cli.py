@@ -112,9 +112,9 @@ def get_option() -> tuple[str, argparse.Namespace] | None:
     parser.add_argument(
         '--note_deposited',
         required=False,
-        metavar="<note>",
+        metavar="<note/invoice>",
         help="Check if the note has been deposited\n"
-             "<note>: Tornado note text"
+             "<note/invoice>: Tornado note text, or the invoice of the note"
     )
     parser.add_argument(
         '--note_withdrawn',
@@ -687,14 +687,20 @@ def create_note(chain: ChainID, symbol: Symbol, unit: TornadoUnit) -> None:
     log.info(tag, f'IMPORTANT: Note backup saved to {backup_path}', log.Color.YELLOW, log.Style.BOLD)
 
 
-def note_deposited(note_text: str) -> None:
-    parsed: tuple[ChainID, Symbol, TornadoUnit, Note] | None = Note.from_text(note_text)
+def note_deposited(note_or_invoice: str) -> None:
+    parsed: tuple[ChainID, Symbol, TornadoUnit, Note] | tuple[ChainID, Symbol, TornadoUnit, HexBytes] | None = Note.from_text(note_or_invoice)
     if parsed is None:
-        log.error(f'Failed to parse note: "{note_text}"')
-        return
-    chain, symbol, unit, note = parsed
+        parsed = Note.from_invoice(note_or_invoice)
+        if parsed is None:
+            log.error(f'Failed to parse note: "{note_or_invoice}"')
+            return
+    chain, symbol, unit, note_or_commitment = parsed
+    if isinstance(note_or_commitment, Note):
+        commitment: HexBytes = note_or_commitment.commitment
+    else:
+        commitment: HexBytes = note_or_commitment
     tornado: Tornado = Tornado(chain, symbol, unit)
-    deposited: bool | None = tornado.note_deposited(note.commitment)
+    deposited: bool | None = tornado.note_deposited(commitment)
     if deposited is not None:
         log.info(tag, f'Deposited: {str(deposited)}')
 
