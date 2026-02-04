@@ -119,9 +119,9 @@ def get_option() -> tuple[str, argparse.Namespace] | None:
     parser.add_argument(
         '--note_withdrawn',
         required=False,
-        metavar="<note>",
+        metavar="<note/nullifier_hash>",
         help="Check if the note has been withdrawn\n"
-             "<note>: Tornado note text"
+             "<note/nullifier_hash>: Tornado note text, or the nullifier hash formatted in 'chain-symbol-unit-<hex>'"
     )
     parser.add_argument(
         '--note_detail',
@@ -705,14 +705,31 @@ def note_deposited(note_or_invoice: str) -> None:
         log.info(tag, f'Deposited: {str(deposited)}')
 
 
-def note_withdrawn(note_text: str) -> None:
-    parsed: tuple[ChainID, Symbol, TornadoUnit, Note] | None = Note.from_text(note_text)
+def note_withdrawn(note_text_or_nullifier_hash: str) -> None:
+    parsed: tuple[ChainID, Symbol, TornadoUnit, Note] | tuple[ChainID, Symbol, TornadoUnit, HexBytes] | None = Note.from_text(note_text_or_nullifier_hash)
     if parsed is None:
-        log.error(f'Failed to parse note: "{note_text}"')
-        return
-    chain, symbol, unit, note = parsed
+        split: list[str] = note_text_or_nullifier_hash.split('-')
+        if len(split) != 4:
+            log.error(tag, f'Failed to parse note or nullifier_hash: "{note_text_or_nullifier_hash}", expecting format "chain-symbol-unit-<hex>"')
+            return
+        chain_str , symbol_str , unit_str , nullifier_hash_str = split
+        try:
+            parsed = (
+                string_to_chain(chain_str),
+                Symbol(symbol_str.lower()),
+                TornadoUnit(unit_str),
+                HexBytes(nullifier_hash_str)
+            )
+        except:
+            log.error(tag, f'Failed to parse note or nullifier_hash: "{note_text_or_nullifier_hash}"')
+            return
+    chain, symbol, unit, note_or_nullifier_hash = parsed
+    if isinstance(note_or_nullifier_hash, Note):
+        nullifier_hash: HexBytes = note_or_nullifier_hash.nullifier_hash
+    else:
+        nullifier_hash: HexBytes = note_or_nullifier_hash
     tornado: Tornado = Tornado(chain, symbol, unit)
-    withdrawn: bool | None = tornado.note_withdrawn(note.nullifier_hash)
+    withdrawn: bool | None = tornado.note_withdrawn(nullifier_hash)
     if withdrawn is not None:
         log.info(tag, f'Withdrawn: {str(withdrawn)}')
 
