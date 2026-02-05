@@ -689,71 +689,122 @@ def create_note(chain: ChainID, symbol: Symbol, unit: TornadoUnit) -> None:
     log.info(tag, f'IMPORTANT: Note backup saved to {backup_path}', log.Color.YELLOW, log.Style.BOLD)
 
 
+def _format_input_abbrev(text: str) -> str:
+    """Format input text with abbreviated hex: <chain>-<symbol>-<unit>-<first8>...<last8>"""
+    parts: list[str] = text.split('-')
+    if len(parts) >= 4:
+        chain_str, symbol_str, unit_str = parts[0], parts[1], parts[2]
+        hex_part: str = '-'.join(parts[3:])  # Handle case where hex might contain '-'
+        if len(hex_part) > 16:
+            hex_abbrev: str = f'{hex_part[:8]}...{hex_part[-8:]}'
+        else:
+            hex_abbrev: str = hex_part
+        return f'{chain_str}-{symbol_str}-{unit_str}-{hex_abbrev}'
+    return text
+
+
 def note_deposited(note_or_invoice: str) -> None:
-    parsed: tuple[ChainID, Symbol, TornadoUnit, Note] | tuple[ChainID, Symbol, TornadoUnit, HexBytes] | None = Note.from_text(note_or_invoice)
-    if parsed is None:
-        parsed = Note.from_invoice(note_or_invoice)
+    # Split input by comma and strip whitespace
+    texts: list[str] = [t.strip() for t in note_or_invoice.split(',')]
+    # Parse and group by (chain, symbol, unit), store (commitment, original_text) tuples
+    grouped: dict[tuple[ChainID, Symbol, TornadoUnit], list[tuple[HexBytes, str]]] = {}
+    for text in texts:
+        parsed: tuple[ChainID, Symbol, TornadoUnit, Note] | tuple[ChainID, Symbol, TornadoUnit, HexBytes] | None = Note.from_text(text)
         if parsed is None:
-            log.error(tag, f'Failed to parse note: "{note_or_invoice}"')
-            return
-    chain, symbol, unit, note_or_commitment = parsed
-    if isinstance(note_or_commitment, Note):
-        commitment: HexBytes = note_or_commitment.commitment
-    else:
-        commitment: HexBytes = note_or_commitment
-    tornado: Tornado = Tornado(chain, symbol, unit)
-    deposited: bool | None = tornado.note_deposited(commitment)
-    if deposited is not None:
-        log.info(tag, f'Deposited: {str(deposited)}')
+            parsed = Note.from_invoice(text)
+            if parsed is None:
+                log.error(tag, f'Failed to parse note: "{text}"')
+                continue
+        chain, symbol, unit, note_or_commitment = parsed
+        if isinstance(note_or_commitment, Note):
+            commitment: HexBytes = note_or_commitment.commitment
+        else:
+            commitment: HexBytes = note_or_commitment
+        key = (chain, symbol, unit)
+        if key not in grouped:
+            grouped[key] = []
+        grouped[key].append((commitment, text))
+    # Process each group
+    for (chain, symbol, unit), items in grouped.items():
+        tornado: Tornado = Tornado(chain, symbol, unit)
+        for commitment, original_text in items:
+            deposited: bool | None = tornado.note_deposited(commitment)
+            if deposited is not None:
+                log.info(tag, f'{str(deposited)}: {_format_input_abbrev(original_text)}')
 
 
 def note_withdrawn(note_text_or_nullifier_hash: str) -> None:
-    parsed: tuple[ChainID, Symbol, TornadoUnit, Note] | tuple[ChainID, Symbol, TornadoUnit, HexBytes] | None = Note.from_text(note_text_or_nullifier_hash)
-    if parsed is None:
-        split: list[str] = note_text_or_nullifier_hash.split('-')
-        if len(split) != 4:
-            log.error(tag, f'Failed to parse note or nullifier_hash: "{note_text_or_nullifier_hash}", expecting format "chain-symbol-unit-<hex>"')
-            return
-        chain_str , symbol_str , unit_str , nullifier_hash_str = split
-        try:
-            parsed = (
-                string_to_chain(chain_str),
-                Symbol(symbol_str.lower()),
-                TornadoUnit(unit_str),
-                HexBytes(nullifier_hash_str)
-            )
-        except:
-            log.error(tag, f'Failed to parse note or nullifier_hash: "{note_text_or_nullifier_hash}"')
-            return
-    chain, symbol, unit, note_or_nullifier_hash = parsed
-    if isinstance(note_or_nullifier_hash, Note):
-        nullifier_hash: HexBytes = note_or_nullifier_hash.nullifier_hash
-    else:
-        nullifier_hash: HexBytes = note_or_nullifier_hash
-    tornado: Tornado = Tornado(chain, symbol, unit)
-    withdrawn: bool | None = tornado.note_withdrawn(nullifier_hash)
-    if withdrawn is not None:
-        log.info(tag, f'Withdrawn: {str(withdrawn)}')
+    # Split input by comma and strip whitespace
+    texts: list[str] = [t.strip() for t in note_text_or_nullifier_hash.split(',')]
+    # Parse and group by (chain, symbol, unit), store (nullifier_hash, original_text) tuples
+    grouped: dict[tuple[ChainID, Symbol, TornadoUnit], list[tuple[HexBytes, str]]] = {}
+    for text in texts:
+        parsed: tuple[ChainID, Symbol, TornadoUnit, Note] | tuple[ChainID, Symbol, TornadoUnit, HexBytes] | None = Note.from_text(text)
+        if parsed is None:
+            split: list[str] = text.split('-')
+            if len(split) != 4:
+                log.error(tag, f'Failed to parse note or nullifier_hash: "{text}", expecting format "chain-symbol-unit-<hex>"')
+                continue
+            chain_str , symbol_str , unit_str , nullifier_hash_str = split
+            try:
+                parsed = (
+                    string_to_chain(chain_str),
+                    Symbol(symbol_str.lower()),
+                    TornadoUnit(unit_str),
+                    HexBytes(nullifier_hash_str)
+                )
+            except:
+                log.error(tag, f'Failed to parse note or nullifier_hash: "{text}"')
+                continue
+        chain, symbol, unit, note_or_nullifier_hash = parsed
+        if isinstance(note_or_nullifier_hash, Note):
+            nullifier_hash: HexBytes = note_or_nullifier_hash.nullifier_hash
+        else:
+            nullifier_hash: HexBytes = note_or_nullifier_hash
+        key = (chain, symbol, unit)
+        if key not in grouped:
+            grouped[key] = []
+        grouped[key].append((nullifier_hash, text))
+    # Process each group
+    for (chain, symbol, unit), items in grouped.items():
+        tornado: Tornado = Tornado(chain, symbol, unit)
+        for nullifier_hash, original_text in items:
+            withdrawn: bool | None = tornado.note_withdrawn(nullifier_hash)
+            if withdrawn is not None:
+                log.info(tag, f'{str(withdrawn)}: {_format_input_abbrev(original_text)}')
 
 
 def note_age(note_or_invoice: str) -> None:
-    parsed: tuple[ChainID, Symbol, TornadoUnit, Note] | tuple[ChainID, Symbol, TornadoUnit, HexBytes] | None = Note.from_text(note_or_invoice)
-    if parsed is None:  # Not a note, try to parse as invoice
-        parsed = Note.from_invoice(note_or_invoice)
-        if parsed is None:
-            log.error(tag, f'Failed to parse note or invoice: "{note_or_invoice}"')
-            return
-    chain, symbol, unit, note_or_commitment = parsed
-    tornado: Tornado = Tornado(chain, symbol, unit)
-    tornado.init(True)
-    if isinstance(note_or_commitment, Note):
-        note_or_commitment = note_or_commitment.commitment
-    age: tuple[int, int] | None = tornado.note_age(note_or_commitment)
-    tornado.un_init()
-    if age is not None:
-        deposits, withdrawals = age
-        log.info(tag, f'Since commitment {note_or_commitment.to_0x_hex()}')
-        log.info(tag, f'Deposit: {deposits}, Withdraw: {withdrawals}')
+    # Split input by comma and strip whitespace
+    texts: list[str] = [t.strip() for t in note_or_invoice.split(',')]
+    # Parse and group by (chain, symbol, unit), store (commitment, original_text) tuples
+    grouped: dict[tuple[ChainID, Symbol, TornadoUnit], list[tuple[HexBytes, str]]] = {}
+    for text in texts:
+        parsed: tuple[ChainID, Symbol, TornadoUnit, Note] | tuple[ChainID, Symbol, TornadoUnit, HexBytes] | None = Note.from_text(text)
+        if parsed is None:  # Not a note, try to parse as invoice
+            parsed = Note.from_invoice(text)
+            if parsed is None:
+                log.error(tag, f'Failed to parse note or invoice: "{text}"')
+                continue
+        chain, symbol, unit, note_or_commitment = parsed
+        if isinstance(note_or_commitment, Note):
+            commitment: HexBytes = note_or_commitment.commitment
+        else:
+            commitment: HexBytes = note_or_commitment
+        key = (chain, symbol, unit)
+        if key not in grouped:
+            grouped[key] = []
+        grouped[key].append((commitment, text))
+    # Process each group
+    for (chain, symbol, unit), items in grouped.items():
+        tornado: Tornado = Tornado(chain, symbol, unit)
+        tornado.init(True)
+        for commitment, original_text in items:
+            age: tuple[int, int] | None = tornado.note_age(commitment)
+            if age is not None:
+                deposits, withdrawals = age
+                log.info(tag, f'Deposited: {deposits}, Withdrawn: {withdrawals}, {_format_input_abbrev(original_text)}')
+        tornado.un_init()
 
 
 if __name__ == "__main__":
