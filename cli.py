@@ -653,9 +653,10 @@ def withdraw_batch(notes_text: str, recipient: ChecksumAddress, key_or_relayer: 
         conn.stop()
 
 def create_note(chain: ChainID, symbol: Symbol, unit: TornadoUnit) -> None:
-    note       : Note = Note.create()
-    backup_str : str  = Note.to_text(chain, symbol, unit, note)
-    invoice_str: str  = Note.to_invoice(chain, symbol, unit, note)
+    note              : Note = Note.create()
+    backup_str        : str  = Note.to_text(chain, symbol, unit, note)
+    invoice_str       : str  = Note.to_invoice(chain, symbol, unit, note)
+    nullifier_hash_str: str  = f'{chain_to_string(chain)}-{symbol.value}-{unit.value}-{note.nullifier_hash.hex().zfill(64)}'
     # Save backup
     filename   : str = f'{datetime.now().strftime("%Y-%m-%d_%H.%M.%S.%f")[:-3]}_{chain_to_string(chain)}_{symbol.value}_{unit.value}.txt'
     backup_path: str = os.path.join(config.BACKUP_DIR, filename).replace('\\', '/')
@@ -665,6 +666,7 @@ def create_note(chain: ChainID, symbol: Symbol, unit: TornadoUnit) -> None:
         with open(backup_path, 'w') as f:
             f.write(f'Note: {backup_str}\n')
             f.write(f'Invoice: {invoice_str}\n')
+            f.write(f'NullifierHash: {nullifier_hash_str}\n')
     except Exception as e:
         log.error(tag, f'Failed to save note to file: {e}')
         return None
@@ -683,7 +685,7 @@ def create_note(chain: ChainID, symbol: Symbol, unit: TornadoUnit) -> None:
     log.info(tag, f'IMPORTANT: Please save the note text below and keep it private', log.Color.YELLOW, log.Style.BOLD)
     log.info(tag, f'Note         : {backup_str}', log.Color.YELLOW, log.Style.BOLD)
     log.info(tag, f'Invoice      : {invoice_str}', log.Color.YELLOW, log.Style.BOLD)
-    log.info(tag, f'NullifierHash: 0x{note.nullifier_hash.hex().zfill(64)}', log.Color.YELLOW, log.Style.BOLD)
+    log.info(tag, f'NullifierHash: {nullifier_hash_str}', log.Color.YELLOW, log.Style.BOLD)
     log.info(tag, f'IMPORTANT: Note backup saved to {backup_path}', log.Color.YELLOW, log.Style.BOLD)
 
 
