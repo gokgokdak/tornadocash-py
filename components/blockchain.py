@@ -227,7 +227,7 @@ class EventPoller(object):
                 if not rpc.is_error(latest):
                     break
                 log.error(self.tag, f'Failed to get latest block number, RPC error: {latest.code.value}')
-                log.info(self.tag, f'Wait {config.RPC_RETRY_INTERVAL_SEC}s and retry')
+                log.warn(self.tag, f'Wait {config.RPC_RETRY_INTERVAL_SEC}s and retry')
                 util.wait(config.RPC_RETRY_INTERVAL_SEC, self.cond)
             count_block: int = latest - self.current + 1
 
@@ -236,7 +236,7 @@ class EventPoller(object):
                 h.on_latest_block(latest)
             # Log how many blocks behind
             if first_loop:
-                log.info(self.tag, f'{count_block} blocks behind, latest block number: {latest}')
+                log.debug(self.tag, f'{count_block} blocks behind, latest block number: {latest}')
 
             # Split into N blocks per request
             batch_size : int = config.BLOCKCHAIN_LOG_EVENT_POLL_BLOCKS_PER_REQUEST[self.chain]
@@ -264,7 +264,7 @@ class EventPoller(object):
                         if not rpc.is_error(result):
                             break
                         log.error(self.tag, f'Failed to get logs for event {expected.event_hash().to_0x_hex()}, RPC error: {result.code.value}')
-                        log.info(self.tag, f'Wait {config.RPC_RETRY_INTERVAL_SEC}s and retry')
+                        log.warn(self.tag, f'Wait {config.RPC_RETRY_INTERVAL_SEC}s and retry')
                         util.wait(config.RPC_RETRY_INTERVAL_SEC, self.cond)
                         result = self.connection.log_receipt(ChecksumAddress(self.contract), chunk[0], chunk[1], [expected.event_hash()])
                     if not rpc.is_error(result):
@@ -316,7 +316,7 @@ class EventPoller(object):
                 # Notify first catchup
                 if first_loop:
                     first_loop = False
-                    log.info(self.tag, f'Synced to block {latest}')
+                    log.debug(self.tag, f'Synced to block {latest}')
                     for h in self.handlers:
                         h.on_first_catchup()
                 # Sleep interval if no new block
