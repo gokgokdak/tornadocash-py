@@ -537,7 +537,7 @@ def deposit_batch(key: Key, batch: str) -> None:
         for symbol, v1 in v0.items():
             for unit, count in v1.items():
                 tornado: Tornado = Tornado(chain, symbol, unit, connections[chain])
-                if not tornado.init(sync_only=False):
+                if not tornado.init(sync_only=True):
                     continue
                 for _ in range(count):
                     try:
