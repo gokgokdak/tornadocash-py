@@ -229,7 +229,10 @@ class EventPoller(object):
                 log.error(self.tag, f'Failed to get latest block number, RPC error: {latest.code.value}')
                 log.warn(self.tag, f'Wait {config.RPC_RETRY_INTERVAL_SEC}s and retry')
                 util.wait(config.RPC_RETRY_INTERVAL_SEC, self.cond)
-            count_block: int = latest - self.current + 1
+            if rpc.is_error(latest):
+                count_block: int = 0
+            else:
+                count_block: int = latest - self.current + 1
 
             # Notify latest block number
             for h in self.handlers:
