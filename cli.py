@@ -438,17 +438,21 @@ def _deposit(key: Key, tornado: Tornado, invoice: HexBytes | None = None) -> Hex
     filename   : str = f'{datetime.now().strftime("%Y-%m-%d_%H.%M.%S.%f")[:-3]}_{chain_to_string(tornado.chain)}_{tornado.symbol.value}_{tornado.unit.value}.txt'
     backup_path: str = os.path.join(config.BACKUP_DIR, filename).replace('\\', '/')
     if note is not None:
+        backup_str        : str  = Note.to_text(tornado.chain, tornado.symbol, tornado.unit, note)
+        invoice_str       : str  = Note.to_invoice(tornado.chain, tornado.symbol, tornado.unit, note)
+        nullifier_hash_str: str  = f'{chain_to_string(tornado.chain)}-{tornado.symbol.value}-{tornado.unit.value}-{note.nullifier_hash.hex().zfill(64)}'
         try:
             if not os.path.exists(config.BACKUP_DIR):
                 os.makedirs(config.BACKUP_DIR, exist_ok=True)
             with open(backup_path, 'w') as f:
-                f.write(f'Note: {Note.to_text(tornado.chain, tornado.symbol, tornado.unit, note)}\n')
-                f.write(f'Invoice: {Note.to_invoice(tornado.chain, tornado.symbol, tornado.unit, note)}\n')
+                f.write(f'Note: {backup_str}\n')
+                f.write(f'Invoice: {invoice_str}\n')
+                f.write(f'NullifierHash: {nullifier_hash_str}\n')
         except Exception as e:
             log.error(tag, f'Failed to save note to file: {e}')
             return None
         log.info(tag, f'IMPORTANT: Please save the note text below and keep it private', log.Color.YELLOW, log.Style.BOLD)
-        log.info(tag, f'IMPORTANT: {Note.to_text(tornado.chain, tornado.symbol, tornado.unit, note)}', log.Color.YELLOW, log.Style.BOLD)
+        log.info(tag, f'IMPORTANT: {backup_str}', log.Color.YELLOW, log.Style.BOLD)
     # Deposit
     tx_hash: HexBytes | None = tornado.deposit(commitment, key)
     if note is not None:
