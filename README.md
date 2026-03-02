@@ -37,7 +37,8 @@ Similar to the original [tornado-cli](https://github.com/tornadocash/tornado-cli
   - [Download Code](#download-code)
   - [Download Database](#download-database)
   - [Sync Blockchain](#sync-blockchain)
-  - [RPC Service (Optional)](#rpc-service-optional)
+  - [RPC Service](#rpc-service)
+  - [Proxy Configuration (Optional)](#proxy-configuration-optional)
   - [Node.js Runtime (Optional)](#nodejs-runtime-optional)
 - [Running Unittests](#running-unittests)
 - [Functionality Testing](#functionality-testing)
@@ -95,6 +96,34 @@ It is recommended to keep the program running to stay synchronized with the bloc
 If RPC error `ADDRESS_SANCTIONED` occurs during deposit or withdrawal, or any RPC errors during the syncing process, please change to another RPC provider manually, replace the `RPC_URLS` variable in `config.py` with your own endpoint.  
 
 ![](/assets/readme_rpc.png)
+
+
+### Proxy Configuration (Optional)
+
+If you need to route all network requests through a proxy server, you can configure the `RPC_PROXY_URL` variable in `config.py`.    
+
+Supported proxy protocols:  
+- **HTTP**: `http://host:port` or `http://username:password@host:port`  
+- **HTTPS**: `https://host:port` or `https://username:password@host:port`  
+- **SOCKS5**: `socks5://host:port` or `socks5://username:password@host:port`  
+
+When a proxy is configured, the CLI will print the visible IP address at startup and ask you to confirm it is as expected:
+```log
+[I 2026-03-02 10:00:00:000 tid=12345 cli] Proxy configured: socks5://127.0.0.1:1080
+[I 2026-03-02 10:00:01:000 tid=12345 cli] Proxy visible IP: 203.0.113.42
+Is this your expected proxy IP? (y/n): y
+```
+
+#### Using Tor as a Proxy
+
+This project does not bundle Tor, but if you have a running Tor service (default `127.0.0.1:9050`) or Tor Browser (default `127.0.0.1:9150`), you can route traffic through it:
+```python
+RPC_PROXY_URL = 'socks5://127.0.0.1:9050'
+```
+
+> **Note:**  
+> Routing through Tor will significantly increase latency and blockchain synchronization time, especially for the initial sync.
+> It is recommended to use a fast and stable proxy if you choose to use one.
 
 
 ### Node.js Runtime (Optional)

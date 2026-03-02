@@ -6,7 +6,7 @@ from components.mytype import ChainID, Second, Symbol, TornadoUnit, chain_to_str
 
 # ============================================== User Configurations ===================================================
 
-# RPC URLs for different chains, modify as needed
+# RPC URLs for different chains, modify as needed, supports HTTP, HTTPS and WebSocket
 RPC_URLS: dict[ChainID, str] = {
     ChainID.ETHEREUM : 'https://1rpc.io/eth',
     ChainID.OPTIMISM : 'https://optimism-rpc.publicnode.com',
@@ -16,6 +16,15 @@ RPC_URLS: dict[ChainID, str] = {
     ChainID.AVALANCHE: 'https://avalanche-c-chain-rpc.publicnode.com',
     ChainID.SEPOLIA  : 'https://ethereum-sepolia-rpc.publicnode.com',
 }
+
+# Optional RPC proxy URL, if you want to use a proxy server for your RPC calls, set the URL here
+# Supports HTTP, HTTPS and Socks5. If None, no proxy will be used.
+# Examples: 'http://127.0.0.1:8080'
+#           'https://user:pass@127.0.0.1:8080'
+#           'socks5://127.0.0.1:1080'
+#           'socks5://user:pass@127.0.0.1:1080'
+#      Tor: 'socks5://127.0.0.1:9050'
+RPC_PROXY_URL: str | None = None
 
 # Time interval in seconds to retry RPC calls if they fail
 RPC_RETRY_INTERVAL_SEC: Second = Second(0.5)
