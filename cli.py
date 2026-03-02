@@ -298,7 +298,7 @@ def _sync(tornado: Tornado, keep: bool, signal: threading.Condition | None = Non
         def __init__(self, meta: str) -> None:
             super().__init__()
             self.meta = meta
-        def on_first_catchup(self, _chain: ChainID, _symbol: Symbol, _unit: TornadoUnit) -> None:
+        def on_blockchain_first_catchup(self, _chain: ChainID, _symbol: Symbol, _unit: TornadoUnit) -> None:
             nonlocal catch_up_bool
             nonlocal signal
             log.info(tag, f'{self.meta}, catch up to the latest blockchain')
@@ -308,12 +308,12 @@ def _sync(tornado: Tornado, keep: bool, signal: threading.Condition | None = Non
             if not keep:
                 with signal:
                     signal.notify_all()
-        def on_sync(self, block_from: int, block_to: int, deposits: list[EventDeposit], withdrawals: list[EventWithdraw]) -> None:
+        def on_blockchain_sync(self, _chain: ChainID, _symbol: Symbol, _unit: TornadoUnit, block_from: int, block_to: int, deposits: list[EventDeposit], withdrawals: list[EventWithdraw]) -> None:
             nonlocal latest_block
             log.info(tag, f'{self.meta}, synced {block_to - block_from + 1} blocks from {block_from} to {block_to}, '
                           f'progress: {min(100.0, 100.0 * block_to / latest_block):.2f}%, '
                           f'deposits: {len(deposits)}, withdrawals: {len(withdrawals)}')
-        def on_latest_block(self, block_number: int) -> None:
+        def on_blockchain_latest_block(self, _chain: ChainID, _symbol: Symbol, _unit: TornadoUnit, block_number: int) -> None:
             nonlocal latest_block
             latest_block = block_number
     handler: Handler = Handler(f'{util.upper_first_char(chain_to_string(tornado.chain))}@{tornado.unit.value}{tornado.symbol.value.upper()}')

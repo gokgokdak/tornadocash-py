@@ -20,16 +20,20 @@ class Tornado(EventPoller.Handler):
 
     class Handler(object):
 
-        def on_first_catchup(self, chain: ChainID, symbol: Symbol, unit: TornadoUnit) -> None:
-            """Called when the first catchup is done."""
+        # Synchronized to the blockchain at the first startup
+        def on_blockchain_first_catchup(self, chain: ChainID, symbol: Symbol, unit: TornadoUnit) -> None:
             pass
 
-        def on_sync(self, block_from: int, block_to: int, deposits: list[EventDeposit], withdrawals: list[EventWithdraw]) -> None:
-            """Called when a sync is done."""
+        # Notify the sync progress
+        def on_blockchain_sync(self, chain: ChainID, symbol: Symbol, unit: TornadoUnit, block_from: int, block_to: int, deposits: list[EventDeposit], withdrawals: list[EventWithdraw]) -> None:
             pass
 
-        def on_latest_block(self, block_number: int) -> None:
-            """Called when the latest block number is updated."""
+        # Notify the latest block number
+        def on_blockchain_latest_block(self, chain: ChainID, symbol: Symbol, unit: TornadoUnit, block_number: int) -> None:
+            pass
+
+        # Notify the progress of rebuilding the merkle tree from database, only called when 'sync_only' is False
+        def on_merkle_tree_rebuilt_progress(self, chain: ChainID, symbol: Symbol, unit: TornadoUnit, numerator: int, denominator: int) -> None:
             pass
 
     def __init__(self, chain: ChainID, symbol: Symbol, unit: TornadoUnit, connection: rpc.Interface | None = None):
@@ -113,7 +117,9 @@ class Tornado(EventPoller.Handler):
                 log.error(self.tag, 'init() failed to get commitments from database')
                 self.db.close()
                 return False
-            self.tree = merkle_tree.create(merkle_tree.ImplType.MEMORY, config.MERKLE_TREE_HEIGHT, commitments)
+            def _(numerator: int, denominator: int) -> None:
+                self.callback('on_merkle_tree_rebuilt_progress', numerator, denominator)
+            self.tree = merkle_tree.create(merkle_tree.ImplType.MEMORY, config.MERKLE_TREE_HEIGHT, commitments, _)
             log.info(self.tag, 'Merkle tree ready')
         # Add handlers
         self.poller.add_handler(self)
@@ -603,11 +609,20 @@ class Tornado(EventPoller.Handler):
     def stop_sync(self) -> None:
         self.poller.stop()
 
+    def callback(self, method_name: str, *args, **kwargs) -> None:
+        with self.mutex:
+            for h in self.handlers:
+                fn = getattr(h, method_name, None)
+                if fn is None:
+                    raise AttributeError(f'Handler {h} does not have method {method_name}')
+                if not callable(fn):
+                    raise AttributeError(f'Handler {h} does not have callable method {method_name}')
+                fn(self.chain, self.symbol, self.unit, *args, **kwargs)
+
     def on_first_catchup(self) -> None:
         with self.mutex:
             self.catchup = True
-            for h in self.handlers:
-                h.on_first_catchup(self.chain, self.symbol, self.unit)
+        self.callback('on_blockchain_first_catchup')
 
     def on_sync(self, block_from: int, block_to: int, deposits: list[EventDeposit], withdrawals: list[EventWithdraw]) -> None:
         with self.mutex:
@@ -616,10 +631,7 @@ class Tornado(EventPoller.Handler):
             if not self.sync_only:
                 for e in deposits:
                     self.tree.add(e.commitment)
-            for h in self.handlers:
-                h.on_sync(block_from, block_to, deposits, withdrawals)
+        self.callback('on_blockchain_sync', block_from, block_to, deposits, withdrawals)
 
     def on_latest_block(self, block_number: int) -> None:
-        with self.mutex:
-            for h in self.handlers:
-                h.on_latest_block(block_number)
+        self.callback('on_blockchain_latest_block', block_number)

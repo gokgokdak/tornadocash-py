@@ -3,6 +3,8 @@ from hexbytes import HexBytes
 from iden3math import Fp1
 from iden3math import hash
 from iden3math import prime
+from typing import Callable
+import math
 import threading
 
 from . import log
@@ -86,7 +88,7 @@ class Interface(object):
 
 class Memory(Interface):
 
-    def __init__(self, height: int, leafs: list[HexBytes] | None = None) -> None:
+    def __init__(self, height: int, leafs: list[HexBytes] | None = None, progress_callback: Callable[[int, int], None] | None = None) -> None:
         super().__init__(ImplType.MEMORY)
         self.TAG      : str                  = f'MerkleTree.{__class__.__name__}'
         self.mutex    : threading.RLock      = threading.RLock()
@@ -99,15 +101,25 @@ class Memory(Interface):
         for i in range(1, self.height):
             self.zeros.append(HexBytes(hash.mimc_sponge([self.zeros[i - 1], self.zeros[i - 1]], 1, b'')[0]))
         if leafs is not None and len(leafs) > 0:
-            if not self._bulk_initialize(leafs):
+            if not self._bulk_initialize(leafs, progress_callback):
                 raise ValueError(f'Illegal leafs')
 
     # Do not call this function directly, use constructor instead
-    def _bulk_initialize(self, leafs: list[HexBytes]) -> bool:
+    def _bulk_initialize(self, leafs: list[HexBytes], progress_callback: Callable[[int, int], None] | None = None) -> bool:
         if len(leafs) > self.capacity:
             log.error(self.TAG, f'Tree capacity exceeded: {len(leafs)} > {self.capacity}')
             return False
         self.layers[0] = leafs
+        # Calculate total size of the tree for progress reporting
+        num_of_all_nodes     : int = len(self.layers[0])
+        num_of_nodes_of_layer: int = len(self.layers[0])
+        for level in range(1, self.height):
+            num_of_nodes_of_layer = math.ceil(num_of_nodes_of_layer / 2)
+            num_of_all_nodes += num_of_nodes_of_layer
+        if progress_callback is not None:
+            progress_callback(0, num_of_all_nodes)
+        # Re-build merkle tree
+        num_of_nodes_rebuilt: int = 0
         for level in range(self.height):
             for node in range(len(self.layers[level])):
                 if not Interface.is_left(node):
@@ -125,7 +137,11 @@ class Memory(Interface):
                         return False
                 else:
                     self.layers[level + 1].append(parent)
-            log.info(self.TAG, f'Level {level} rebuilt, size: {len(self.layers[level])}')
+                # Report progress
+                num_of_nodes_rebuilt += 2 if node + 1 < len(self.layers[level]) else 1
+                if progress_callback is not None:
+                    progress_callback(num_of_nodes_rebuilt, num_of_all_nodes)
+            log.info(self.TAG, f'Level {level + 1} rebuilt, size: {len(self.layers[level])}')
         self._size = len(leafs)
         return True
 
@@ -237,8 +253,16 @@ class Memory(Interface):
             path_indices=path[1]
         )
 
-def create(impl: ImplType, height: int = 20, leafs: list[HexBytes] | None = None) -> Interface:
+"""
+Factory method to create a merkle tree instance
+@param  impl        The implementation type of the merkle tree
+@param  height      The height of the merkle tree, default to 20
+@param  leafs       The initial leafs to build the tree, default to None
+@param  callback    The callback function to report the progress of building tree, only meaningful if 'leafs' is not 
+                    param1 = numerator, param2 = denominator, e.g., callback(1, 10) means 10% of the tree is built
+"""
+def create(impl: ImplType, height: int = 20, leafs: list[HexBytes] | None = None, progress_callback: Callable[[int, int], None] | None = None) -> Interface:
     if impl == ImplType.MEMORY:
-        return Memory(height, leafs)
+        return Memory(height, leafs, progress_callback)
     else:
         raise NotImplementedError
