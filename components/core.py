@@ -11,7 +11,7 @@ from web3.types import Nonce, Wei, TxParams
 from . import database, log, merkle_tree, rpc, util
 from .blockchain import EventPoller, EventDeposit, EventWithdraw
 from .mytype import ChainID, CircuitInput, Key, MerkleProof, Metadata, Note, Second, Symbol, TornadoUnit, SymbolType, chain_to_string
-from .util import get_symbol_type, unit_to_wei, wait
+from .util import get_requests_proxies, get_symbol_type, unit_to_wei, wait
 import config
 import zk
 
@@ -396,7 +396,7 @@ class Tornado(EventPoller.Handler):
         if use_relayer:
             # HTTP Get relayer status
             try:
-                resp: Response = requests.get(relayer_url.rstrip('/') + '/status')
+                resp: Response = requests.get(relayer_url.rstrip('/') + '/status', proxies=get_requests_proxies(config.RPC_PROXY_URL))
             except BaseException as e:
                 log.error(self.tag, f'withdraw(to={recipient}), failed to get relayer status from {relayer_url}, exception: {e}')
                 return None
@@ -506,7 +506,8 @@ class Tornado(EventPoller.Handler):
                             zk_proof['solidity']['publicSignals'][4],  # fee
                             zk_proof['solidity']['publicSignals'][5],  # refund
                         ]
-                    }
+                    },
+                    proxies=get_requests_proxies(config.RPC_PROXY_URL)
                 )
             except BaseException as e:
                 log.error(self.tag, f'withdraw(to={recipient}), failed to submit withdrawal to relayer: {e}')
@@ -530,7 +531,7 @@ class Tornado(EventPoller.Handler):
                 nonlocal count_attempts
                 nonlocal count_attempts_max
                 try:
-                    resp = requests.get(relayer_url.rstrip('/') + f'/v1/jobs/{job_id}')
+                    resp = requests.get(relayer_url.rstrip('/') + f'/v1/jobs/{job_id}', proxies=get_requests_proxies(config.RPC_PROXY_URL))
                 except BaseException as e:
                     log.error(self.tag, f'withdraw(to={recipient}), failed to get job status from relayer: {e}')
                     return None

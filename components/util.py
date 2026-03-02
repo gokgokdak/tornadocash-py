@@ -5,7 +5,10 @@ import signal
 import threading
 import time
 from typing import Any, Callable
+from urllib.parse import urlparse
 from web3.types import Wei
+
+import requests
 
 from .mytype import ChainID, Metadata, Second, Symbol, SymbolType, TornadoUnit, string_to_chain
 import config
@@ -163,3 +166,71 @@ def upper_first_char(s: str) -> str:
     if len(s) == 0:
         return s
     return s[0].upper() + s[1:]
+
+
+def get_requests_proxies(proxy_url: str | None) -> dict[str, str] | None:
+    """
+    Convert proxy URL to requests proxies dict.
+    Supports http, https, socks5, and socks5h proxies.
+    Returns None if proxy is not configured or invalid.
+
+    Note:
+        `requests` uses only `http` and `https` keys in the proxy map.
+        The proxy scheme is encoded in the URL value (for example:
+        `socks5://127.0.0.1:1080`), so there is no separate `socks5` key.
+    """
+    if parse_proxy_url(proxy_url) is None:
+        return None
+    return {
+        'http': proxy_url,
+        'https': proxy_url,
+    }
+
+
+def get_proxy_visible_ip(proxy_url: str | None, timeout: int = 10) -> str | None:
+    """
+    Get the visible IP address when using the proxy.
+    Returns None if failed to get the IP.
+    """
+    try:
+        proxies = get_requests_proxies(proxy_url)
+        resp = requests.get('https://api.ipify.org?format=json', proxies=proxies, timeout=timeout)
+        if resp.status_code == 200:
+            return resp.json().get('ip')
+    except Exception:
+        pass
+    # Try alternative service
+    try:
+        proxies = get_requests_proxies(proxy_url)
+        resp = requests.get('https://ifconfig.me/ip', proxies=proxies, timeout=timeout)
+        if resp.status_code == 200:
+            return resp.text.strip()
+    except Exception:
+        pass
+    return None
+
+
+def parse_proxy_url(proxy_url: str | None) -> dict | None:
+    """
+    Parse proxy URL into components.
+    Returns dict with scheme, host, port, username, password or None if invalid.
+    """
+    if not proxy_url:
+        return None
+    try:
+        parsed = urlparse(proxy_url)
+        scheme = (parsed.scheme or '').lower()
+        if scheme not in ('http', 'https', 'socks5', 'socks5h'):
+            return None
+        if parsed.hostname is None:
+            return None
+        return {
+            'scheme': scheme,
+            'host': parsed.hostname,
+            'port': parsed.port,
+            'username': parsed.username,
+            'password': parsed.password,
+        }
+    except Exception:
+        return None
+

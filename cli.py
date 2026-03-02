@@ -1,6 +1,7 @@
 import argparse
 import qrcode
 import os
+import sys
 import threading
 import traceback
 from datetime import datetime
@@ -13,6 +14,7 @@ from components import log, rpc, util
 from components.blockchain import EventDeposit, EventWithdraw
 from components.core import Tornado
 from components.mytype import ChainID, Key, Metadata, Note, Second, Symbol, TornadoUnit, chain_to_string, string_to_chain
+from components.util import get_proxy_visible_ip
 import config
 
 
@@ -811,11 +813,36 @@ def note_age(note_or_invoice: str) -> None:
         tornado.un_init()
 
 
+def _confirm_proxy() -> bool:
+    log.info(tag, f'Proxy configured: {config.RPC_PROXY_URL}')
+    visible_ip = get_proxy_visible_ip(config.RPC_PROXY_URL)
+    if visible_ip:
+        log.info(tag, f'Public IP with proxy: {visible_ip}')
+        log.STDOUT.write('Is this your expected proxy IP? (y/n): ')
+        log.STDOUT.flush()
+        confirm = sys.__stdin__.readline().strip().lower()
+        if confirm != 'y':
+            log.warn(tag, 'User declined proxy IP, exiting')
+            return False
+    else:
+        log.warn(tag, 'Failed to detect public IP, proxy may not be working')
+        log.STDOUT.write('Continue without verified proxy? (y/n): ')
+        log.STDOUT.flush()
+        confirm = sys.__stdin__.readline().strip().lower()
+        if confirm != 'y':
+            log.warn(tag, 'User chose not to continue, exiting')
+            return False
+    return True
+
 if __name__ == "__main__":
     option: tuple[str, argparse.Namespace] | None = get_option()
     if option is not None:
         log.init(config.LOG_DIR)
         log.set_level(log.Level.INFO)
         log.set_console_enable(True)
+        # Print proxy information if configured and ask user to confirm
+        if config.RPC_PROXY_URL and not _confirm_proxy():
+            log.un_init()
+            exit(0)
         handle_option(option[0], option[1])
         log.un_init()

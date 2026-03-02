@@ -12,8 +12,9 @@ from web3.types import LogReceipt, Nonce, TxReceipt, TxParams, Wei
 import threading
 import traceback
 
-from . import log
+from . import log, util
 from .mytype import ChainID, Key
+import config
 
 
 class ErrorCode(Enum):
@@ -169,10 +170,40 @@ class Connection(Interface):
             self.stop()
         else:
             log.debug(self.TAG, f'start({self})')
+
+        proxy_url: str | None = config.RPC_PROXY_URL
+        proxy_info = util.parse_proxy_url(proxy_url)
+        if proxy_url is not None and proxy_info is None:
+            log.warn(self.TAG, f'Invalid RPC_PROXY_URL "{proxy_url}", only http/https/socks5/socks5h are supported. Proxy disabled.')
+        if proxy_info is not None and proxy_info['port'] is None:
+            log.warn(self.TAG, f'RPC_PROXY_URL "{proxy_url}" is missing port, proxy disabled.')
+            proxy_info = None
         if self.url.startswith('http'):
-            self.w3 = Web3(Web3.HTTPProvider(self.url))
+            request_kwargs = {}
+            if proxy_info:  # HTTP/HTTPS provider with proxy support
+                request_kwargs['proxies'] = {
+                    'http': proxy_url,
+                    'https': proxy_url,
+                }
+            self.w3 = Web3(Web3.HTTPProvider(self.url, request_kwargs=request_kwargs))
         elif self.url.startswith('ws'):
-            self.w3 = Web3(Web3.LegacyWebSocketProvider(self.url))
+            websocket_kwargs = {}
+            if proxy_info:  # WebSocket provider with proxy support
+                proxy_scheme = proxy_info['scheme']
+                if proxy_scheme in ('socks5', 'socks5h'):
+                    # SOCKS5 proxy for WebSocket
+                    websocket_kwargs['proxy_type'] = proxy_scheme
+                    websocket_kwargs['http_proxy_host'] = proxy_info['host']
+                    websocket_kwargs['http_proxy_port'] = proxy_info['port']
+                    if proxy_info['username'] and proxy_info['password']:
+                        websocket_kwargs['http_proxy_auth'] = (proxy_info['username'], proxy_info['password'])
+                elif proxy_scheme in ('http', 'https'):
+                    # HTTP proxy for WebSocket
+                    websocket_kwargs['http_proxy_host'] = proxy_info['host']
+                    websocket_kwargs['http_proxy_port'] = proxy_info['port']
+                    if proxy_info['username'] and proxy_info['password']:
+                        websocket_kwargs['http_proxy_auth'] = (proxy_info['username'], proxy_info['password'])
+            self.w3 = Web3(Web3.LegacyWebSocketProvider(self.url, websocket_kwargs=websocket_kwargs))
         else:
             raise ValueError(f'Unsupported RPC url: {self.url}')
         if self.chain == ChainID.POLYGON or self.chain == ChainID.BSC:
