@@ -315,25 +315,50 @@ The bigger the number, the more anonymity you get.
 
 ## Known Relayers  
 
-Last updated: August 17, 2025  
+Last updated: March 10, 2026
 
-Sourced from 👉 https://relayer.tornadoeth.cash
-
-| URL                                       | ENS                 | Chain    | Address                                                                                                               |
-|-------------------------------------------|---------------------|----------|-----------------------------------------------------------------------------------------------------------------------|
-| https://safe-relayer.online               | safe-relayer.eth    | Ethereum | [0xC7c3C87603c55955100DceCA02443fBff1B15361](https://etherscan.io/address/0xC7c3C87603c55955100DceCA02443fBff1B15361) |
-| https://mainnet-tornado.cheap-relayer.xyz | cheap-relayer.eth   | Ethereum | [0x076D4E32C6A5D888fC4658281539c94E778C796d](https://etherscan.io/address/0x076D4E32C6A5D888fC4658281539c94E778C796d) |
-| https://eth.t-relayer.com                 | t-relayer.eth       | Ethereum | [0x000000Cd6521Ed1a65FAe0678eA15aF4EEAD74fe](https://etherscan.io/address/0x000000Cd6521Ed1a65FAe0678eA15aF4EEAD74fe) |
-| https://main-relayer.com                  | main-relayer.eth    | Ethereum | [0x15980A3Bd6ed317f42d2eD0DCf3d3D730b6Bc0C5](https://etherscan.io/address/0x15980A3Bd6ed317f42d2eD0DCf3d3D730b6Bc0C5) |
-| https://relayer.wind-egg.com              | default-relayer.eth | Ethereum | [0x5555555731006f71f121144534Ca7C8799F66AA3](https://etherscan.io/address/0x5555555731006f71f121144534Ca7C8799F66AA3) |
-| https://main.gm777.xyz                    | 0xgm777.eth         | Ethereum | [0x94596B6A626392F5D972D6CC4D929a42c2f0008c](https://etherscan.io/address/0x94596B6A626392F5D972D6CC4D929a42c2f0008c) |
-| https://black-hardy.com                   | k-relayer.eth       | Ethereum | [0xC49415493eB3Ec64a0F13D8AA5056f1CfC4ce35c](https://etherscan.io/address/0xC49415493eB3Ec64a0F13D8AA5056f1CfC4ce35c) |
-| https://tornima.xyz                       | torrelayer.eth      | Ethereum | [0x2Ee39Ff05643bC7cc9ed31B71e142429044A425C](https://etherscan.io/address/0x2Ee39Ff05643bC7cc9ed31B71e142429044A425C) |
-| https://torn-city.com                     | torn-city.eth       | Ethereum | [0xd04e9f0945DEA8373D882C730e2c93a74B591796](https://etherscan.io/address/0xd04e9f0945DEA8373D882C730e2c93a74B591796) |
-| https://mainnet.das-relayer.com           | das-relayer.eth     | Ethereum | [0xFfDf1Dd461e3Ce4A78685D2DC0641d95B71b9F53](https://etherscan.io/address/0xFfDf1Dd461e3Ce4A78685D2DC0641d95B71b9F53) |
-| https://main.firstrelayer.xyz             | first-relayer.eth   | Ethereum | [0xD8f1Eb586Ecb93745392EE254a028f1F67E1437E](https://etherscan.io/address/0xD8f1Eb586Ecb93745392EE254a028f1F67E1437E) |
-| https://main.x-relayer.top                | 0xrelayer.eth       | Ethereum | [0x0Bed01A860a56266383D648320852715FEcAc7ae](https://etherscan.io/address/0x0Bed01A860a56266383D648320852715FEcAc7ae) |
-| https://eth.maxstorn.xyz                  | nice-relayer.eth    | Ethereum | [0xb0Cdc0AB2D454F2360d4629d519819E13DBE816A](https://etherscan.io/address/0xb0Cdc0AB2D454F2360d4629d519819E13DBE816A) |
+| ENS                   | Chain     | URL                                         | Reward Address                                                                                                                     |
+|-----------------------|-----------|---------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
+| 0xgm777.eth           | Ethereum  | https://gm777.xyz                           | [0x94596B6A626392F5D972D6CC4D929a42c2f0008c](https://etherscan.io/address/0x94596B6A626392F5D972D6CC4D929a42c2f0008c)              |
+| 0xgm777.eth           | BSC       | https://bsc.gm777.xyz                       | [0x03392600086874456E08D2bAc104380BCdEBCfC0](https://bscscan.com/address/0x03392600086874456E08D2bAc104380BCdEBCfC0)               |
+| 0xgm777.eth           | Arbitrum  | https://arb.gm777.xyz                       | [0x03392600086874456E08D2bAc104380BCdEBCfC0](https://arbiscan.io/address/0x03392600086874456E08D2bAc104380BCdEBCfC0)               |
+| 0xgn777.eth           | Ethereum  | https://gn777.xyz                           | [0x0381DeeE9BBCD701D022b47c81F5b0079F48d38C](https://etherscan.io/address/0x0381DeeE9BBCD701D022b47c81F5b0079F48d38C)              |
+| 0xgn777.eth           | BSC       | https://bsc.gn777.xyz                       | [0xD0b9b6674B77beFD88884D2BDeea979c023938E8](https://bscscan.com/address/0xD0b9b6674B77beFD88884D2BDeea979c023938E8)               |
+| 0xgn777.eth           | Arbitrum  | https://arb.gn777.xyz                       | [0xD0b9b6674B77beFD88884D2BDeea979c023938E8](https://arbiscan.io/address/0xD0b9b6674B77beFD88884D2BDeea979c023938E8)               |
+| bitah.eth             | Ethereum  | https://tornado.bitah.link                  | [0x7E7461889B1cdd10f6929B4a3feA611Df8b45B04](https://etherscan.io/address/0x7E7461889B1cdd10f6929B4a3feA611Df8b45B04)              |
+| bitah.eth             | BSC       | https://bsc-tornado.bitah.link              | [0x7E7461889B1cdd10f6929B4a3feA611Df8b45B04](https://bscscan.com/address/0x7E7461889B1cdd10f6929B4a3feA611Df8b45B04)               |
+| bitah.eth             | Polygon   | https://polygon-tornado.bitah.link          | [0x7E7461889B1cdd10f6929B4a3feA611Df8b45B04](https://polygonscan.com/address/0x7E7461889B1cdd10f6929B4a3feA611Df8b45B04)           |
+| cheap-relayer.eth     | Ethereum  | https://mainnet-tornado.cheap-relayer.xyz   | [0x076D4E32C6A5D888fC4658281539c94E778C796d](https://etherscan.io/address/0x076D4E32C6A5D888fC4658281539c94E778C796d)              |
+| cheap-relayer.eth     | BSC       | https://bsc-tornado.cheap-relayer.xyz       | [0x076D4E32C6A5D888fC4658281539c94E778C796d](https://bscscan.com/address/0x076D4E32C6A5D888fC4658281539c94E778C796d)               |
+| cheap-relayer.eth     | Polygon   | https://polygon-tornado.cheap-relayer.xyz   | [0x076D4E32C6A5D888fC4658281539c94E778C796d](https://polygonscan.com/address/0x076D4E32C6A5D888fC4658281539c94E778C796d)           |
+| cheap-relayer.eth     | Avalanche | https://avalanche-tornado.cheap-relayer.xyz | [0x076D4E32C6A5D888fC4658281539c94E778C796d](https://avascan.info/blockchain/c/address/0x076D4E32C6A5D888fC4658281539c94E778C796d) |
+| default-relayer.eth   | Ethereum  | https://eth.default-relayer.com             | [0x5555555731006f71f121144534Ca7C8799F66AA3](https://etherscan.io/address/0x5555555731006f71f121144534Ca7C8799F66AA3)              |
+| default-relayer.eth   | BSC       | https://bsc.default-relayer.com             | [0x5555555731006f71f121144534Ca7C8799F66AA3](https://bscscan.com/address/0x5555555731006f71f121144534Ca7C8799F66AA3)               |
+| hello-relayer.eth     | Ethereum  | https://hirelay04.xyz                       | [0x213Cfeb89529efC2eAE2a502D4a8253Fe4Ae76eF](https://etherscan.io/address/0x213Cfeb89529efC2eAE2a502D4a8253Fe4Ae76eF)              |
+| hello-relayer.eth     | BSC       | https://binance.hirelay04.xyz               | [0x213Cfeb89529efC2eAE2a502D4a8253Fe4Ae76eF](https://bscscan.com/address/0x213Cfeb89529efC2eAE2a502D4a8253Fe4Ae76eF)               |
+| hello-relayer.eth     | Arbitrum  | https://arb.hirelay04.xyz                   | SERVICE DOWN                                                                                                                       |
+| hello-relayer.eth     | Optimism  | https://op.hirelay04.xyz                    | SERVICE DOWN                                                                                                                       |
+| hello-relayer.eth     | Polygon   | https://polygon.hirelay04.xyz               | [0x213Cfeb89529efC2eAE2a502D4a8253Fe4Ae76eF](https://polygonscan.com/address/0x213Cfeb89529efC2eAE2a502D4a8253Fe4Ae76eF)           |
+| hello-relayer.eth     | Avalanche | https://avax.hirelay04.xyz                  | [0x213Cfeb89529efC2eAE2a502D4a8253Fe4Ae76eF](https://avascan.info/blockchain/c/address/0x213Cfeb89529efC2eAE2a502D4a8253Fe4Ae76eF) |
+| hurricane-relayer.eth | Ethereum  | https://eth.hurricane42.xyz                 | [0x16CB924b5b7ef604139bE95F8762ed817852Db92](https://etherscan.io/address/0x16CB924b5b7ef604139bE95F8762ed817852Db92)              |
+| hurricane-relayer.eth | BSC       | https://bsc.hurricane42.xyz                 | [0x16CB924b5b7ef604139bE95F8762ed817852Db92](https://bscscan.com/address/0x16CB924b5b7ef604139bE95F8762ed817852Db92)               |
+| hurricane-relayer.eth | Polygon   | https://polygon.hurricane42.xyz             | [0x16CB924b5b7ef604139bE95F8762ed817852Db92](https://polygonscan.com/address/0x16CB924b5b7ef604139bE95F8762ed817852Db92)           |
+| k-relayer.eth         | Ethereum  | https://black-hardy.com                     | [0xC49415493eB3Ec64a0F13D8AA5056f1CfC4ce35c](https://etherscan.io/address/0xC49415493eB3Ec64a0F13D8AA5056f1CfC4ce35c)              |
+| k-relayer.eth         | BSC       | https://bsc.black-hardy.com                 | SERVICE DOWN                                                                                                                       |
+| reltor.eth            | Ethereum  | https://eth.reltor.su                       | [0x4750BCfcC340AA4B31be7e71fa072716d28c29C5](https://etherscan.io/address/0x4750BCfcC340AA4B31be7e71fa072716d28c29C5)              |
+| reltor.eth            | BSC       | https://binance.reltor.su                   | [0x4750BCfcC340AA4B31be7e71fa072716d28c29C5](https://bscscan.com/address/0x4750BCfcC340AA4B31be7e71fa072716d28c29C5)               |
+| reltor.eth            | Polygon   | https://polygon.reltor.su                   | [0x4750BCfcC340AA4B31be7e71fa072716d28c29C5](https://polygonscan.com/address/0x4750BCfcC340AA4B31be7e71fa072716d28c29C5)           |
+| safe-relayer.eth      | Ethereum  | https://safe-relayer.online                 | [0xC7c3C87603c55955100DceCA02443fBff1B15361](https://etherscan.io/address/0xC7c3C87603c55955100DceCA02443fBff1B15361)              |
+| safe-relayer.eth      | BSC       | https://bsc.safe-relayer.online             | [0xC7c3C87603c55955100DceCA02443fBff1B15361](https://bscscan.com/address/0xC7c3C87603c55955100DceCA02443fBff1B15361)               |
+| safe-torn.eth         | Ethereum  | https://eth3.safetorn.ovh                   | [0x0A5B2bF3cCfB44C1D22F07Eed9553eCba752D4aD](https://etherscan.io/address/0x0A5B2bF3cCfB44C1D22F07Eed9553eCba752D4aD)              |
+| safe-torn.eth         | BSC       | https://bsc3.safetorn.ovh                   | [0x0A5B2bF3cCfB44C1D22F07Eed9553eCba752D4aD](https://bscscan.com/address/0x0A5B2bF3cCfB44C1D22F07Eed9553eCba752D4aD)               |
+| safe-torn.eth         | Polygon   | https://poly3.safetorn.ovh                  | [0x0A5B2bF3cCfB44C1D22F07Eed9553eCba752D4aD](https://polygonscan.com/address/0x0A5B2bF3cCfB44C1D22F07Eed9553eCba752D4aD)           |
+| sky-relayer.eth       | Ethereum  | https://sky-relayer.xyz                     | [0xEE4C45Cc5eAa535CB8a8ffdc92f2839A601fe226](https://etherscan.io/address/0xEE4C45Cc5eAa535CB8a8ffdc92f2839A601fe226)              |
+| sky-relayer.eth       | BSC       | https://bsc.sky-relayer.xyz                 | [0xEE4C45Cc5eAa535CB8a8ffdc92f2839A601fe226](https://bscscan.com/address/0xEE4C45Cc5eAa535CB8a8ffdc92f2839A601fe226)               |
+| torn-city.eth         | Ethereum  | http://torncity.fun                         | [0xd04e9f0945DEA8373D882C730e2c93a74B591796](https://etherscan.io/address/0xd04e9f0945DEA8373D882C730e2c93a74B591796)              |
+| torn-city.eth         | BSC       | https://bsc.torncity.fun                    | [0xd04e9f0945DEA8373D882C730e2c93a74B591796](https://bscscan.com/address/0xd04e9f0945DEA8373D882C730e2c93a74B591796)               |
+| t-relayer.eth         | Ethereum  | https://eth.t-relayer.com                   | [0x000000Cd6521Ed1a65FAe0678eA15aF4EEAD74fe](https://etherscan.io/address/0x000000Cd6521Ed1a65FAe0678eA15aF4EEAD74fe)              |
+| t-relayer.eth         | BSC       | https://bsc.t-relayer.com                   | [0x000000Cd6521Ed1a65FAe0678eA15aF4EEAD74fe](https://bscscan.com/address/0x000000Cd6521Ed1a65FAe0678eA15aF4EEAD74fe)               |
 
 
 ## Supported Deployments
