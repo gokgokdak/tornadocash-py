@@ -175,7 +175,7 @@ class Connection(Interface):
             self.w3 = Web3(Web3.LegacyWebSocketProvider(self.url))
         else:
             raise ValueError(f'Unsupported RPC url: {self.url}')
-        if self.chain == ChainID.POLYGON:
+        if self.chain == ChainID.POLYGON or self.chain == ChainID.BSC:
             self.w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
         self.w3.eth = Web3EthWrapper(self.w3, self.chain)
         self.turn_off = False
