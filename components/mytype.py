@@ -148,10 +148,14 @@ class Key(object):
 class Note(object):
 
     def __init__(self, nullifier: bytearray, secret: bytearray) -> None:
+        assert len(nullifier) == 31, f'Nullifier must be 31 bytes, got {len(nullifier)} bytes'
+        assert len(secret)    == 31, f'Secret must be 31 bytes, got {len(secret)} bytes'
         self.nullifier     : HexBytes = HexBytes(nullifier)
         self.secret        : HexBytes = HexBytes(secret)
         self.nullifier_hash: HexBytes = HexBytes(Note._pedersen(nullifier))
         self.commitment    : HexBytes = HexBytes(Note._pedersen(nullifier + secret))
+        assert len(self.nullifier_hash) == 32, f'Generated nullifier_hash is not 32 bytes, got {len(self.nullifier_hash)} bytes'
+        assert len(self.commitment)     == 32, f'Generated commitment is not 32 bytes, got {len(self.nullifier_hash)} bytes'
 
     @staticmethod
     def create() -> 'Note':
