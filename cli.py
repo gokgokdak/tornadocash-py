@@ -13,7 +13,7 @@ from web3.types import TxReceipt
 from components import log, rpc, util
 from components.blockchain import EventDeposit, EventWithdraw
 from components.core import Tornado
-from components.mytype import ChainID, Key, Metadata, Note, Second, Symbol, TornadoUnit, chain_to_string, string_to_chain
+from components.mytype import ChainID, Key, Metadata, Note, Second, Symbol, SymbolType, TornadoUnit, chain_to_string, string_to_chain
 from components.util import get_proxy_visible_ip
 import config
 
@@ -455,8 +455,28 @@ def _deposit(key: Key, tornado: Tornado, invoice: HexBytes | None = None) -> Hex
             return None
         log.info(tag, f'IMPORTANT: Please save the note text below and keep it private', log.Color.YELLOW, log.Style.BOLD)
         log.info(tag, f'IMPORTANT: {backup_str}', log.Color.YELLOW, log.Style.BOLD)
+    # Check ERC20 allowance and approve before Tornado.deposit().
+    nonce: int | rpc.Error | None = None
+    if SymbolType.ERC20 == util.get_symbol_type(tornado.symbol):
+        # Get latest nonce
+        nonce = tornado.connection.nonce(key.eth_address())
+        if rpc.is_error(nonce):
+            log.error(tag, f'deposit(from={key.eth_address()}), failed to get nonce, RPC error: {nonce.code.value}')
+            return None
+        # Check allowance
+        allowance: int | rpc.Error = rpc.contract_call(tornado.token_contract, 'allowance', key.eth_address(), tornado.proxy_address)
+        if rpc.is_error(allowance):
+            log.error(tag, f'deposit(from={key.eth_address()}), failed to call contract function allowance(address,address), RPC error: {allowance.code.value}')
+            return None
+        # Approve if not enough and increase nonce
+        if allowance < util.unit_to_wei(tornado.unit, tornado.meta.decimals[tornado.symbol]):
+            approve_hash: HexBytes | None = tornado.approve(key, nonce)
+            if approve_hash is None:
+                return None
+            log.info(tag, f'Approve {tornado.unit.value} {tornado.symbol.value.upper()}, tx_hash: {approve_hash.to_0x_hex()}')
+            nonce += 1
     # Deposit
-    tx_hash: HexBytes | None = tornado.deposit(commitment, key)
+    tx_hash: HexBytes | None = tornado.deposit(commitment, key, nonce)
     if note is not None:
         if tx_hash is None:  # Transaction failed, remove the backup file
             try:
