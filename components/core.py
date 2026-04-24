@@ -2,6 +2,7 @@ import requests
 import threading
 from eth_account.datastructures import SignedTransaction
 from eth_typing import ChecksumAddress
+from functools import wraps
 from hexbytes import HexBytes
 from requests import Response
 from web3 import Web3
@@ -17,6 +18,27 @@ import zk
 
 
 class Tornado(EventPoller.Handler):
+
+    @staticmethod
+    def locked(method):
+        @wraps(method)
+        def wrapper(self, *args, **kwargs):
+            with self.mutex:
+                return method(self, *args, **kwargs)
+        return wrapper
+
+    @staticmethod
+    def locked_initialized(default=None):
+        def decorator(method):
+            @wraps(method)
+            def wrapper(self, *args, **kwargs):
+                with self.mutex:
+                    if not self.initialized:
+                        log.error(self.tag, f'{method.__name__}(), not initialized')
+                        return default
+                    return method(self, *args, **kwargs)
+            return wrapper
+        return decorator
 
     class Handler(object):
 
@@ -56,7 +78,9 @@ class Tornado(EventPoller.Handler):
         self.catchup            : bool                          = False
         self.tree               : merkle_tree.Interface | None  = None
         self.zksnark            : zk.circuit.Interface          = zk.circuit.create(zk.circuit.ImplType.JAVASCRIPT)
-        self.mutex              : threading.Lock                = threading.Lock()
+        self.mutex              : threading.RLock               = threading.RLock()
+        self.sync_cond          : threading.Condition           = threading.Condition(self.mutex)
+        self.sync_transitioning : bool                          = False
         self.handlers           : list[Tornado.Handler]         = []
         with open(config.TORNADO_PROXY_ABI_PATH, 'r') as f:
             proxy_abi: str = f.read()
@@ -88,82 +112,178 @@ class Tornado(EventPoller.Handler):
     @param  sync_only   If True, only sync events without rebuilding the merkle tree, 'withdraw()' will not be available
     '''
     def init(self, sync_only: bool) -> bool:
-        if self.initialized:
-            log.debug(self.tag, 'init() already initialized')
-            return True
-        # Start RPC connection
-        if not self.external:
-            if not self.connection.start():
-                log.error(self.tag, f'Failed to start RPC connection for {self.chain}')
-                return False
-        elif not self.connection.started():
-            log.error(self.tag, 'The external RPC connection is not started')
-            return False
-        # Open database
-        if not self.db.open(self.chain, self.symbol, self.unit):
-            log.error(self.tag, f'Opening database failed for {self.chain}_{self.unit}{self.symbol}')
-            return False
-        # Check integrity
-        if not self.db.check_integrity():
-            log.error(self.tag, 'init() failed to check database integrity')
-            self.db.close()
-            return False
-        # Rebuild merkle tree
-        self.sync_only = sync_only
-        if not sync_only:
-            log.info(self.tag, 'Rebuilding merkle tree from database, please wait...')
-            commitments: list[HexBytes] | None = self.db.get_commitments()
-            if commitments is None:
-                log.error(self.tag, 'init() failed to get commitments from database')
-                self.db.close()
-                return False
-            def _(numerator: int, denominator: int) -> None:
-                self.callback('on_merkle_tree_rebuilt_progress', numerator, denominator)
-            self.tree = merkle_tree.create(merkle_tree.ImplType.MEMORY, config.MERKLE_TREE_HEIGHT, commitments, _)
-            log.info(self.tag, 'Merkle tree ready')
-        # Add handlers
-        self.poller.add_handler(self)
-        self.initialized = True
-        log.debug(self.tag, f'init()')
-        return True
+        with self.sync_cond:
+            while self.sync_transitioning:
+                self.sync_cond.wait()
+            if self.initialized:
+                log.debug(self.tag, 'init() already initialized')
+                return True
+            self.sync_transitioning = True
+        try:
+            with self.mutex:
+                # Start RPC connection
+                if not self.external:
+                    if not self.connection.start():
+                        log.error(self.tag, f'Failed to start RPC connection for {self.chain}')
+                        return False
+                elif not self.connection.started():
+                    log.error(self.tag, 'The external RPC connection is not started')
+                    return False
+                # Open database
+                if not self.db.open(self.chain, self.symbol, self.unit):
+                    log.error(self.tag, f'Opening database failed for {self.chain}_{self.unit}{self.symbol}')
+                    return False
+                # Check integrity
+                if not self.db.check_integrity():
+                    log.error(self.tag, 'init() failed to check database integrity')
+                    self.db.close()
+                    return False
+                # Rebuild merkle tree
+                self.sync_only = sync_only
+                self.catchup = False
+                if not sync_only:
+                    log.info(self.tag, 'Rebuilding merkle tree from database, please wait...')
+                    commitments: list[HexBytes] | None = self.db.get_commitments()
+                    if commitments is None:
+                        log.error(self.tag, 'init() failed to get commitments from database')
+                        self.db.close()
+                        return False
+                    def _(numerator: int, denominator: int) -> None:
+                        self.callback('on_merkle_tree_rebuilt_progress', numerator, denominator)
+                    self.tree = merkle_tree.create(merkle_tree.ImplType.MEMORY, config.MERKLE_TREE_HEIGHT, commitments, _)
+                    log.info(self.tag, 'Merkle tree ready')
+                # Add handlers
+                self.poller.add_handler(self)
+                self.initialized = True
+                log.debug(self.tag, f'init()')
+                return True
+        finally:
+            with self.sync_cond:
+                self.sync_transitioning = False
+                self.sync_cond.notify_all()
 
     def un_init(self) -> None:
-        if not self.initialized:
-            log.debug(self.tag, 'un_init() already un-initialized')
-            return
-        log.debug(self.tag, 'un_init() shutting down')
-        self.initialized = False
-        if self.poller.is_started():
-            self.poller.stop()
-        self.poller.remove_all_handlers()
-        self.db.close()
-        if not self.external:
-            if self.connection.started():
-                self.connection.stop()
-        self.tree = None
-        self.sync_only = False
-        log.debug(self.tag, 'un_init() done')
+        with self.sync_cond:
+            while self.sync_transitioning:
+                self.sync_cond.wait()
+            if not self.initialized:
+                log.debug(self.tag, 'un_init() already un-initialized')
+                return
+            log.debug(self.tag, 'un_init() shutting down')
+            self.initialized = False
+            self.sync_transitioning = True
+            poller_started: bool = self.poller.is_started()
+        try:
+            if poller_started:
+                self.poller.stop()
+        finally:
+            with self.sync_cond:
+                self.poller.remove_all_handlers()
+                self.db.close()
+                if not self.external:
+                    if self.connection.started():
+                        self.connection.stop()
+                self.tree = None
+                self.sync_only = False
+                self.catchup = False
+                self.sync_transitioning = False
+                self.sync_cond.notify_all()
+                log.debug(self.tag, 'un_init() done')
 
+    @locked
     def is_initialized(self) -> bool:
         return not self.initialized
 
+    @locked
     def is_catchup(self) -> bool:
-        with self.mutex:
-            return self.catchup
+        return self.catchup
 
+    @locked
     def add_handler(self, handler: Handler) -> None:
-        with self.mutex:
-            self.handlers.append(handler)
+        self.handlers.append(handler)
 
+    @locked
     def remove_all_handlers(self) -> None:
+        self.handlers.clear()
+
+    def start_sync(self) -> bool:
+        with self.sync_cond:
+            while self.sync_transitioning:
+                self.sync_cond.wait()
+            if not self.initialized:
+                log.error(self.tag, 'start_sync(), not initialized')
+                return False
+            if self.poller.is_started():
+                log.warn(self.tag, 'start_sync() already started')
+                return False
+            self.sync_transitioning = True
+        try:
+            with self.mutex:
+                contract    : ChecksumAddress = self.meta.deployment[self.symbol][self.unit][0]
+                latest_block: int | None      = self.db.get_latest_block_number()
+                if latest_block is None:
+                    log.error(self.tag, 'start_sync(), failed to get latest block number from database')
+                    return False
+                if latest_block > self.meta.deployment[self.symbol][self.unit][1]:
+                    latest_block += 1
+                self.catchup = False
+            return self.poller.start(contract, latest_block)
+        finally:
+            with self.sync_cond:
+                self.sync_transitioning = False
+                self.sync_cond.notify_all()
+
+    def stop_sync(self) -> None:
+        with self.sync_cond:
+            while self.sync_transitioning:
+                self.sync_cond.wait()
+            if not self.poller.is_started():
+                log.warn(self.tag, 'stop_sync() already stopped')
+                return
+            self.sync_transitioning = True
+        try:
+            self.poller.stop()
+        finally:
+            with self.sync_cond:
+                self.sync_transitioning = False
+                self.sync_cond.notify_all()
+
+    def callback(self, method_name: str, *args, **kwargs) -> None:
         with self.mutex:
-            self.handlers.clear()
+            handlers: list[Tornado.Handler] = list(self.handlers)
+        for h in handlers:
+            fn = getattr(h, method_name, None)
+            if fn is None:
+                raise AttributeError(f'Handler {h} does not have method {method_name}')
+            if not callable(fn):
+                raise AttributeError(f'Handler {h} does not have callable method {method_name}')
+            fn(self.chain, self.symbol, self.unit, *args, **kwargs)
+
+    def on_first_catchup(self) -> None:
+        with self.mutex:
+            self.catchup = True
+        self.callback('on_blockchain_first_catchup')
+
+    def on_sync(self, block_from: int, block_to: int, deposits: list[EventDeposit], withdrawals: list[EventWithdraw]) -> None:
+        with self.mutex:
+            if not self.db.add_synchronized(block_to, deposits, withdrawals):
+                raise RuntimeError(f'on_sync() failed to add synchronized data to database')
+            if not self.sync_only:
+                if self.tree is None:
+                    raise RuntimeError(f'on_sync() merkle tree is not initialized')
+                for e in deposits:
+                    self.tree.add(e.commitment)
+        self.callback('on_blockchain_sync', block_from, block_to, deposits, withdrawals)
+
+    def on_latest_block(self, block_number: int) -> None:
+        self.callback('on_blockchain_latest_block', block_number)
 
     # Check if a note has been deposited
     # @param    commitment      The commitment to query
     # @return   True : The corresponding note has been deposited
     #           False: The corresponding note has not been used
     #           None : Failed to query the blockchain, e.g. RPC connection error
+    @locked_initialized()
     def note_deposited(self, commitment: HexBytes) -> bool | None:
         result: bool | rpc.Error = rpc.contract_call(self.deployment_contract, 'commitments', commitment)
         if rpc.is_error(result):
@@ -176,6 +296,7 @@ class Tornado(EventPoller.Handler):
     # @return   True : The corresponding note has been withdrawn
     #           False: The corresponding note has not been used
     #           None : Failed to query the blockchain, e.g. RPC connection error
+    @locked_initialized()
     def note_withdrawn(self, nullifier_hash: HexBytes) -> bool | None:
         result: bool | rpc.Error = rpc.contract_call(self.deployment_contract, 'nullifierHashes', nullifier_hash)
         if rpc.is_error(result):
@@ -186,6 +307,7 @@ class Tornado(EventPoller.Handler):
     # Get how many deposit and withdrawal events happened after the note was deposited
     # @param    commitment  The commitment of the note to query
     # @return   Tuple of (num_deposits, num_withdrawals) on success, None if failed
+    @locked_initialized()
     def note_age(self, commitment: HexBytes) -> tuple[int, int] | None:
         return self.db.note_age(commitment)
 
@@ -193,6 +315,7 @@ class Tornado(EventPoller.Handler):
     # @param    address     The address to make the approval, must use the corresponding private key to sign the transaction
     # @param    nonce       The nonce of the address, if None, will be queried from the blockchain
     # @return   TxParams of the unsigned transaction on success, None if failed
+    @locked_initialized()
     def approve_tx(self, address: ChecksumAddress, nonce: Nonce | rpc.Error | None = None) -> TxParams | None:
         if nonce is None:
             nonce = self.connection.nonce(address)
@@ -217,6 +340,7 @@ class Tornado(EventPoller.Handler):
     # @param    key     The private key to make the approval
     # @param    nonce   The nonce of the address, if None, will be queried from the blockchain
     # @return   HexBytes of transaction hash on success, None if failed
+    @locked_initialized()
     def approve(self, key: Key, nonce: Nonce | rpc.Error | None = None) -> HexBytes | None:
         if nonce is None:
             nonce = self.connection.nonce(key.eth_address())
@@ -258,6 +382,7 @@ class Tornado(EventPoller.Handler):
     # @param    from_address    The address to make the deposit, must use the corresponding private key to sign the transaction
     # @param    nonce           The nonce of the from_address, if None, will be queried from the blockchain
     # @return   TxParams of the unsigned transaction on success, None if failed
+    @locked_initialized()
     def deposit_tx(self, commitment: HexBytes, from_address: ChecksumAddress, nonce: Nonce | rpc.Error | None = None) -> TxParams | None:
         if nonce is None:
             nonce = self.connection.nonce(from_address)
@@ -282,6 +407,7 @@ class Tornado(EventPoller.Handler):
     # @param    key         The private key to make the deposit
     # @param    nonce       The nonce of the from_address, if None, will be queried from the blockchain
     # @return   HexBytes of transaction hash on success, None if failed
+    @locked_initialized()
     def deposit(self, commitment: HexBytes, key: Key, nonce: Nonce | rpc.Error | None = None) -> HexBytes | None:
         if nonce is None:
             nonce = self.connection.nonce(key.eth_address())
@@ -328,6 +454,7 @@ class Tornado(EventPoller.Handler):
     # @param    nonce           The nonce of the withdrawer address, if None, will be queried from the blockchain
     # @param    refund          Amount to send to the recipient
     # @return   TxParams of the unsigned transaction on success, None if failed
+    @locked_initialized()
     def withdraw_tx(self,
                     note: Note,
                     withdrawer: ChecksumAddress,
@@ -369,6 +496,7 @@ class Tornado(EventPoller.Handler):
     # @param    nonce           The nonce of the withdrawer address, if None and not using relayer, will be queried from the blockchain
     # @param    refund          Amount to send to the recipient, make sure the `key_or_relayer` is a key and has enough balance
     # @return   HexBytes of transaction hash on success, None if failed or sync-only mode
+    @locked_initialized()
     def withdraw(self,
                  note: Note,
                  recipient: ChecksumAddress,
@@ -596,43 +724,3 @@ class Tornado(EventPoller.Handler):
             return None
         log.info(self.tag, f'Withdraw {self.unit.value} {self.symbol.value.upper()} succeed, tx hash: {tx_hash.to_0x_hex()}')
         return tx_hash
-
-    def start_sync(self) -> bool:
-        contract    : ChecksumAddress = self.meta.deployment[self.symbol][self.unit][0]
-        latest_block: int | None      = self.db.get_latest_block_number()
-        if latest_block is None:
-            log.error(self.tag, 'start_sync(), failed to get latest block number from database')
-            return False
-        if latest_block > self.meta.deployment[self.symbol][self.unit][1]:
-            latest_block += 1
-        return self.poller.start(contract, latest_block)
-
-    def stop_sync(self) -> None:
-        self.poller.stop()
-
-    def callback(self, method_name: str, *args, **kwargs) -> None:
-        with self.mutex:
-            for h in self.handlers:
-                fn = getattr(h, method_name, None)
-                if fn is None:
-                    raise AttributeError(f'Handler {h} does not have method {method_name}')
-                if not callable(fn):
-                    raise AttributeError(f'Handler {h} does not have callable method {method_name}')
-                fn(self.chain, self.symbol, self.unit, *args, **kwargs)
-
-    def on_first_catchup(self) -> None:
-        with self.mutex:
-            self.catchup = True
-        self.callback('on_blockchain_first_catchup')
-
-    def on_sync(self, block_from: int, block_to: int, deposits: list[EventDeposit], withdrawals: list[EventWithdraw]) -> None:
-        with self.mutex:
-            if not self.db.add_synchronized(block_to, deposits, withdrawals):
-                raise RuntimeError(f'on_sync() failed to add synchronized data to database')
-            if not self.sync_only:
-                for e in deposits:
-                    self.tree.add(e.commitment)
-        self.callback('on_blockchain_sync', block_from, block_to, deposits, withdrawals)
-
-    def on_latest_block(self, block_number: int) -> None:
-        self.callback('on_blockchain_latest_block', block_number)
