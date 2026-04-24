@@ -414,20 +414,6 @@ class Tornado(EventPoller.Handler):
             if rpc.is_error(nonce):
                 log.error(self.tag, f'deposit(from={key.eth_address()}), failed to get nonce, RPC error: {nonce.code.value}')
                 return None
-        # Allowance for ERC20 token
-        if SymbolType.ERC20 == get_symbol_type(self.symbol):
-            # Check allowance
-            allowance: int | rpc.Error = rpc.contract_call(self.token_contract, 'allowance', key.eth_address(), self.proxy_address)
-            if rpc.is_error(allowance):
-                log.error(self.tag, f'deposit(from={key.eth_address()}), failed to call contract function allowance(address,address), RPC error: {allowance.code.value}')
-                return None
-            # Approve if not enough
-            if allowance < unit_to_wei(self.unit, self.meta.decimals[self.symbol]):
-                tx_hash: HexBytes | None = self.approve(key, nonce)
-                if tx_hash is None:
-                    return None
-            # Increase nonce manually
-            nonce += 1
         # Build
         built_tx: TxParams | None = self.deposit_tx(commitment, key.eth_address(), nonce)
         if built_tx is None:
