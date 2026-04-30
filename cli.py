@@ -858,6 +858,7 @@ if __name__ == "__main__":
     option: tuple[str, argparse.Namespace] | None = get_option()
     if option is not None:
         log.init(config.LOG_DIR)
+        log.set_simple_header(True)
         log.set_level(log.Level.INFO)
         log.set_console_enable(True)
         # Print proxy information if configured and ask user to confirm

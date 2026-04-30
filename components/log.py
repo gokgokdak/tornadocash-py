@@ -107,6 +107,7 @@ class Logger(object):
         self.interval   : Second    = write_interval
         self.timestamp  : Second    = Second(0)
         self.min_level  : Level     = Level.INFO
+        self.simple_head: bool      = False
         self.stdout     : bool      = False
         self.mutex      : MPLock    = MP.Lock()
         self.rotate_size: MBytes    = rotate_size
@@ -117,6 +118,10 @@ class Logger(object):
     def console(self, enable: bool) -> None:
         with self.mutex:
             self.stdout = enable
+
+    def simple_header(self, enable: bool) -> None:
+        with self.mutex:
+            self.simple_head = enable
 
     def set_level(self, level: Level) -> None:
         with self.mutex:
@@ -147,8 +152,12 @@ class Logger(object):
             for msg in message:
                 date_and_precise_time = lambda: datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S:%f')[:-3]
                 console_color = LEVEL_COLOR[level] if color == Color.NONE else color
-                text_console: str = f'[{level.value} {date_and_precise_time()} tid={TR.get_native_id()} {tag}] {get_console_rich_text(msg, console_color, style)}'
-                text_write  : str = f'[{level.value} {date_and_precise_time()} tid={TR.get_native_id()} {tag}] {msg}'
+                if self.simple_head:
+                    header: str = f'[{level.value}]'
+                else:
+                    header: str = f'[{level.value} {date_and_precise_time()} tid={TR.get_native_id()} {tag}]'
+                text_console: str = f'{header} {get_console_rich_text(msg, console_color, style)}'
+                text_write  : str = f'{header} {msg}'
                 if filename is not None and line_number is not None:
                     location: str = f' ({filename}:{line_number})'
                     text_console += get_console_rich_text(location, console_color, style)
@@ -216,6 +225,12 @@ class Instance:
         if Instance.obj is None:
             return
         Instance.obj.console(enable)
+
+    @classmethod
+    def set_simple_header(cls, enable: bool) -> None:
+        if Instance.obj is None:
+            return
+        Instance.obj.simple_header(enable)
 
     @classmethod
     def set_level(cls, level: Level) -> None:
@@ -312,6 +327,10 @@ def un_init() -> bool:
 
 def set_console_enable(enable: bool) -> None:
     Instance.set_console_enable(enable)
+
+
+def set_simple_header(enable: bool) -> None:
+    Instance.set_simple_header(enable)
 
 
 def set_level(level: Level):
