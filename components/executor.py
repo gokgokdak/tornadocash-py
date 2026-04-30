@@ -46,6 +46,11 @@ class Queue:
         self.worker = None
         log.debug(self.tag, 'stop() done')
 
+    def clear(self) -> None:
+        with self.cond:
+            self.queue.clear()
+            self.cond.notify_all()
+
     def queue_size(self, lock: bool) -> int:
         if lock:
             with self.cond:
@@ -139,6 +144,10 @@ class Pool(object):
         for worker in self.workers:
             worker.stop()
         log.info(self.TAG, 'stop() done')
+
+    def clear(self) -> None:
+        for worker in self.workers:
+            worker.clear()
 
     def run_sync(self, job: Job, queue_id: int | None = None) -> bool:
         if self.turn_off:

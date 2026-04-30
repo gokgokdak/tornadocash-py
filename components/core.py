@@ -2,7 +2,7 @@ import requests
 import threading
 from eth_account.datastructures import SignedTransaction
 from eth_typing import ChecksumAddress
-from functools import wraps
+from functools import partial, wraps
 from hexbytes import HexBytes
 from requests import Response
 from web3 import Web3
@@ -11,6 +11,7 @@ from web3.types import Nonce, Wei, TxParams
 
 from . import database, log, merkle_tree, rpc, util
 from .blockchain import EventPoller, EventDeposit, EventWithdraw
+from .executor import Job, Pool
 from .mytype import ChainID, CircuitInput, Key, MerkleProof, Metadata, Note, Second, Symbol, TornadoUnit, SymbolType, chain_to_string
 from .util import get_requests_proxies, get_symbol_type, unit_to_wei, wait
 import config
@@ -710,3 +711,113 @@ class Tornado(EventPoller.Handler):
             return None
         log.info(self.tag, f'Withdraw {self.unit.value} {self.symbol.value.upper()} succeed, tx hash: {tx_hash.to_0x_hex()}')
         return tx_hash
+
+
+class TornadoManager(Tornado.Handler):
+
+    def __init__(self):
+        self.tag: str = f'{__class__.__name__}'
+        self.mutex: threading.Lock = threading.Lock()
+        self.pool: Pool | None = None
+        self.initialized: bool = False
+        self.initializing: bool = False # un_init() will set this to False from True to notify the init() break early
+        self.init_cond: threading.Condition = threading.Condition()
+        self.connections: dict[ChainID, rpc.Interface] = {}
+        self.instances: dict[ChainID, dict[Symbol, dict[TornadoUnit, Tornado]]] = {}
+
+    def _stop_all_rpc(self) -> None:
+        for conn in self.connections.values():
+            if conn.started():
+                conn.stop()
+
+    def init(self, sync_only: bool) -> bool:
+        meta_data: dict[ChainID, Metadata] = util.load_metadata()
+        num_of_instances: int = 0
+        # Check and update status
+        with self.mutex:
+            if self.initialized:
+                log.debug(self.tag, 'init() already initialized')
+                return True
+            if self.initializing:
+                log.warn(self.tag, 'init() previously initializing')
+                return True
+            self.initializing = True
+        # Create RPC connections
+        for chain_id, v in meta_data.items():
+            if chain_id in self.connections:
+                continue
+            self.connections[chain_id] = rpc.Connection(chain_id, config.RPC_URLS[chain_id])
+            if not self.connections[chain_id].start():
+                log.error(self.tag, f'Failed to connect to RPC: {config.RPC_URLS[chain_id]}')
+                self._stop_all_rpc()
+                with self.mutex:
+                    self.initialized  = False
+                    self.initializing = False
+                    return False
+        # Create tornado instances
+        for chain_id, symbols in meta_data.items():
+            if chain_id not in self.instances:
+                self.instances[chain_id] = {}
+            for symbol, units in symbols.deployment.items():
+                if symbol not in self.instances[chain_id]:
+                    self.instances[chain_id][symbol] = {}
+                for unit in units.keys():
+                    num_of_instances += 1
+                    self.instances[chain_id][symbol][unit] = Tornado(chain_id, symbol, unit, self.connections[chain_id])
+        # Create task pool
+        all_succeed    : bool                = True
+        num_of_finished: int                 = 0
+        inited_instance: list[Tornado]       = []
+        self.pool = Pool(num_of_instances)
+        self.pool.start()
+        # Initialize all instances
+        def _init_job(_tornado: Tornado) -> None:
+            nonlocal all_succeed
+            nonlocal num_of_finished
+            nonlocal inited_instance
+            result: bool = _tornado.init(sync_only=sync_only)
+            with self.init_cond:
+                if result:
+                    inited_instance.append(_tornado)
+                else:
+                    all_succeed = False
+                    log.error(self.tag, f'Failed to initialize {util.upper_first_char(chain_to_string(_tornado.chain))} {_tornado.unit.value} {_tornado.symbol.value}')
+                num_of_finished += 1
+                self.init_cond.notify_all()
+        for chain_id, symbols in self.instances.items():
+            for symbol, units in symbols.items():
+                for unit, tornado in units.items():
+                    self.pool.run_async(Job(
+                        f'Init_{util.upper_first_char(chain_to_string(tornado.chain))}_{tornado.unit.value}_{tornado.symbol.value}',
+                        partial(_init_job, tornado)
+                    ))
+        # Wait for initialization
+        with self.init_cond:
+            while num_of_finished < num_of_instances:
+                if all_succeed and self.initializing: # un_init() will set this to False and should break early
+                    self.init_cond.wait()
+                    continue
+                log.info(self.tag, 'break early')
+                break
+        self.pool.clear()
+        self.pool.stop()
+        # If any instance failed to initialize, un-initialize all and return
+        if not all_succeed:
+            for tornado in inited_instance:
+                tornado.un_init()
+            self._stop_all_rpc()
+            with self.mutex:
+                self.initialized = False
+                self.initializing = False
+                return False
+        with self.mutex:
+            self.initialized = True
+            self.initializing = True
+            return True
+
+    def un_init(self) -> None:
+        log.info(self.tag, 'un_init()')
+        with self.mutex:
+            self.initializing = False
+        with self.init_cond:
+            self.init_cond.notify_all()
