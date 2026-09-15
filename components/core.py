@@ -409,7 +409,7 @@ class Tornado(EventPoller.Handler):
                 if int(relayer_status['netId']) != self.chain.value:
                     log.error(self.tag, f'withdraw(to={recipient}), relayer netId {relayer_status["netId"]} does not match chain {self.chain.value}')
                     return None
-                for k, v in relayer_status['ethPrices'].items():
+                for k, v in relayer_status.get('ethPrices', {}).items():
                     if k not in Symbol:
                         continue
                     relayer_eth_prices[Symbol(k)] = Wei(int(v))
