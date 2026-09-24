@@ -1,16 +1,20 @@
 import json
 import os
-import shutil
 import subprocess
 from enum import Enum
 from hexbytes import HexBytes
 
-import config
 from components import log
 from components.mytype import CircuitInput
+from zk.groth16.input import prepare_circuit_input
+from zk.groth16.prover import prove as prove_witness
+from zk.groth16.serialization import SOLIDITY_PROOF_SIZE, parse_proof, solidity_proof_bytes
+from zk.groth16.verifier import verify as verify_proof
+from zk.groth16.witness import calculate_witness
 
 
 class ImplType(Enum):
+    PYTHON     = 'python'
     JAVASCRIPT = 'javascript'
 
 
@@ -18,6 +22,7 @@ class Interface(object):
 
     def __init__(self, _type: ImplType) -> None:
         self._type: ImplType = _type
+        self.TAG  : str      = type(self).__name__
 
     def prove(self, ctx: CircuitInput) -> dict | None:
         raise NotImplementedError
@@ -31,14 +36,7 @@ class Javascript(Interface):
     def __init__(self):
         super().__init__(ImplType.JAVASCRIPT)
         self.TAG: str = __class__.__name__
-        if config.BUNDLED_NODE_JS:
-            sys_node: str | None = shutil.which('node')
-            if sys_node is None:
-                self.node: str = config.BUNDLED_NODE_JS_EXE
-            else:
-                self.node: str = sys_node
-        else:
-            self.node: str = 'node'
+        self.node: str = 'node'
         self.prover_path  : str = os.path.join(os.path.dirname(__file__), 'js/prover.js').replace('\\', '/')
         self.verifier_path: str = os.path.join(os.path.dirname(__file__), 'js/verifier.js').replace('\\', '/')
 
@@ -119,7 +117,37 @@ class Javascript(Interface):
         return True
 
 
+class Python(Interface):
+    """In-process implementation of the fixed Tornado Groth16 circuit."""
+
+    def __init__(self) -> None:
+        super().__init__(ImplType.PYTHON)
+
+    def prove(self, ctx: CircuitInput) -> dict | None:
+        try:
+            witness = calculate_witness(prepare_circuit_input(ctx))
+            result = prove_witness(witness)
+            parsed = parse_proof(result)
+            if len(solidity_proof_bytes(parsed)) != SOLIDITY_PROOF_SIZE:
+                raise ValueError("invalid Solidity proof length")
+            if not verify_proof(result):
+                raise ValueError("generated proof failed self-verification")
+            return result
+        except Exception as error:
+            log.error(self.TAG, f"Error generating proof: {error}")
+            return None
+
+    def verify(self, proof: dict) -> bool:
+        try:
+            return verify_proof(proof)
+        except Exception as error:
+            log.error(self.TAG, f"Error verifying proof: {error}")
+            return False
+
+
 def create(impl: ImplType) -> Interface:
+    if impl == ImplType.PYTHON:
+        return Python()
     if impl == ImplType.JAVASCRIPT:
         return Javascript()
     else:

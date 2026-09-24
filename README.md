@@ -38,7 +38,7 @@ Similar to the original [tornado-cli](https://github.com/tornadocash/tornado-cli
   - [Download Database](#download-database)
   - [Sync Blockchain](#sync-blockchain)
   - [RPC Service (Optional)](#rpc-service-optional)
-  - [Node.js Runtime (Optional)](#nodejs-runtime-optional)
+  - [Zero-knowledge proof runtime (Optional)](#zero-knowledge-proof-runtime-optional)
 - [Running Unittests](#running-unittests)
 - [Functionality Testing](#functionality-testing)
 - [Usage & Tutorial](#usage--tutorial)
@@ -56,7 +56,7 @@ Similar to the original [tornado-cli](https://github.com/tornadocash/tornado-cli
 
 ### Download Code
 
-Required minimum Python version `3.10+`, recommend `3.13`  
+Requires Python `3.10+`; Python `3.14` is recommended.  
 
 Clone this repository and install dependencies    
     
@@ -90,25 +90,34 @@ Or, sync all deployments:
 
 It is recommended to keep the program running to stay synchronized with the blockchain, simply add a `--keep` option to `--sync` or `--sync_all` command.  
 
-### RPC Service
+### RPC Service (Optional)
 
 If RPC error `ADDRESS_SANCTIONED` occurs during deposit or withdrawal, or any RPC errors during the syncing process, please change to another RPC provider manually, replace the `RPC_URLS` variable in `config.py` with your own endpoint.  
 
 ![](/assets/readme_rpc.png)
 
 
-### Node.js Runtime (Optional)
+### Zero-knowledge proof runtime (Optional)
 
-Node.js runtime is required, version 14 or above is recommended.  
+Select the Groth16 backend in `config.py`:
 
-Setup boolean variable `BUNDLED_NODE_JS` to specify the runtime.  
+```python
+ZK_BACKEND: str = 'python'  # Values: 'python', 'javascript'
+ZK_WORKERS: int = 8         # Values: 1 to 8
+```
 
-If `True`, will try to use the Node.js runtime on your machine if found, please make sure command `node` is available in your PATH environment, otherwise use the bundled binary under the `./zk/bin/` directory.  
-If `False`, only the bundled binary under the `./zk/bin/` directory will be used.  
+The Python backend is the default and does not require Node.js.
+The legacy JavaScript backend remains available for compatibility checks and requires `node` on `PATH`.
 
-![](/assets/readme_nodejs.png)
+Using Python 3.14.7 and Node.js 26.7.0, the median proof-generation time over five runs with the same input was:
 
-See 👉 [Node.js official website](https://nodejs.org/en/download) for installation if you don't want to use the bundled binary.  
+| Backend    | Median  |
+|------------|---------|
+| Python     | 1.061 s |
+| JavaScript | 1.791 s |
+
+The Python backend was 40.8% faster in this benchmark. Results vary by hardware and runtime version.
+See [`zk/groth16/README.md`](zk/groth16/README.md) for implementation and artifact verification details.
 
 
 ## Running Unittests
@@ -123,7 +132,7 @@ pytest -q
 
 ## Functionality Testing
 To test the deposit and withdrawal functionalities, you can use the Ethereum Sepolia testnet to try it out.  
-Here are some faucets to obtain Sepolia ETH without account registration:
+Sepolia ETH faucets:
 
 Alchemy 👉 [https://www.alchemy.com/faucets/ethereum-sepolia](https://www.alchemy.com/faucets/ethereum-sepolia)    
 Chainlink 👉 [https://faucets.chain.link/sepolia](https://faucets.chain.link/sepolia)  
@@ -163,8 +172,8 @@ A very convenient way if you have multiple addresses on different chains that ho
 ```bash
 # python cli.py --deposit_batch <key> <json>
 # <key> : Private key to provide ETHs for deposit and pay the gas fee, hex string, '0x' prefix is optional
-# <json>: JSON string to describe a batch, eg:
-#         {"ethereum": {"eth": {"10": 100, "100": 20}}, "polygon": {"pol": {"100000": 1000}}}'
+# <json>: JSON string describing the batch, eg:
+#         {"ethereum": {"eth": {"10": 100, "100": 20}}, "polygon": {"pol": {"100000": 1000}}}
 
 > python cli.py --deposit_batch 0x0f36dead4beafdead4beafdead4beafdead4beafdead4beafdead4beafde9a66 "{'sepolia':{'eth':{'0.1':3}}}"
 ```
@@ -278,7 +287,7 @@ If succeeded, you will see logs like below.
 [I 2025-10-10 09:54:38:586 tid=44584 Tornado] withdraw(to=0xA09CBdDb54c7bD239F80b252d25002001580BafF) succeed, tx hash: 0x71fde15c7ff5e84886f664ab5dcf78b9d0a6b607c8d6c52ad37749ec9287bc0b (core.py:532)
 ```
 
-Somtimes with a relayer, you need to increase the service fee rate in `config.py`, the default is `1.8%`
+Some relayers require a higher service fee. The default rate in `config.py` is `1.8%`.
 
 ![](/assets/readme_withdraw.png)
 
@@ -315,7 +324,10 @@ The bigger the number, the more anonymity you get.
 
 ## Known Relayers  
 
-Last updated: March 10, 2026
+Last checked: August 26, 2026
+
+Availability changes over time. Check `<url>/status` before submitting a
+withdrawal; `SERVICE DOWN` reflects the last check above.
 
 | ENS                   | Chain     | URL                                         | Reward Address                                                                                                                     |
 |-----------------------|-----------|---------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
@@ -325,7 +337,7 @@ Last updated: March 10, 2026
 | 0xgn777.eth           | Ethereum  | https://gn777.xyz                           | [0x0381DeeE9BBCD701D022b47c81F5b0079F48d38C](https://etherscan.io/address/0x0381DeeE9BBCD701D022b47c81F5b0079F48d38C)              |
 | 0xgn777.eth           | BSC       | https://bsc.gn777.xyz                       | [0xD0b9b6674B77beFD88884D2BDeea979c023938E8](https://bscscan.com/address/0xD0b9b6674B77beFD88884D2BDeea979c023938E8)               |
 | 0xgn777.eth           | Arbitrum  | https://arb.gn777.xyz                       | [0xD0b9b6674B77beFD88884D2BDeea979c023938E8](https://arbiscan.io/address/0xD0b9b6674B77beFD88884D2BDeea979c023938E8)               |
-| bitah.eth             | Ethereum  | https://tornado.bitah.link                  | [0x7E7461889B1cdd10f6929B4a3feA611Df8b45B04](https://etherscan.io/address/0x7E7461889B1cdd10f6929B4a3feA611Df8b45B04)              |
+| bitah.eth             | Ethereum  | https://tornado.bitah.link                  | [0x7E3893725d4e238B4c8c83375bBAd024a66Ffa42](https://etherscan.io/address/0x7E3893725d4e238B4c8c83375bBAd024a66Ffa42)              |
 | bitah.eth             | BSC       | https://bsc-tornado.bitah.link              | [0x7E7461889B1cdd10f6929B4a3feA611Df8b45B04](https://bscscan.com/address/0x7E7461889B1cdd10f6929B4a3feA611Df8b45B04)               |
 | bitah.eth             | Polygon   | https://polygon-tornado.bitah.link          | [0x7E7461889B1cdd10f6929B4a3feA611Df8b45B04](https://polygonscan.com/address/0x7E7461889B1cdd10f6929B4a3feA611Df8b45B04)           |
 | cheap-relayer.eth     | Ethereum  | https://mainnet-tornado.cheap-relayer.xyz   | [0x076D4E32C6A5D888fC4658281539c94E778C796d](https://etherscan.io/address/0x076D4E32C6A5D888fC4658281539c94E778C796d)              |
@@ -345,11 +357,11 @@ Last updated: March 10, 2026
 | hurricane-relayer.eth | Polygon   | https://polygon.hurricane42.xyz             | [0x16CB924b5b7ef604139bE95F8762ed817852Db92](https://polygonscan.com/address/0x16CB924b5b7ef604139bE95F8762ed817852Db92)           |
 | k-relayer.eth         | Ethereum  | https://black-hardy.com                     | [0xC49415493eB3Ec64a0F13D8AA5056f1CfC4ce35c](https://etherscan.io/address/0xC49415493eB3Ec64a0F13D8AA5056f1CfC4ce35c)              |
 | k-relayer.eth         | BSC       | https://bsc.black-hardy.com                 | SERVICE DOWN                                                                                                                       |
-| reltor.eth            | Ethereum  | https://eth.reltor.su                       | [0x4750BCfcC340AA4B31be7e71fa072716d28c29C5](https://etherscan.io/address/0x4750BCfcC340AA4B31be7e71fa072716d28c29C5)              |
-| reltor.eth            | BSC       | https://binance.reltor.su                   | [0x4750BCfcC340AA4B31be7e71fa072716d28c29C5](https://bscscan.com/address/0x4750BCfcC340AA4B31be7e71fa072716d28c29C5)               |
-| reltor.eth            | Polygon   | https://polygon.reltor.su                   | [0x4750BCfcC340AA4B31be7e71fa072716d28c29C5](https://polygonscan.com/address/0x4750BCfcC340AA4B31be7e71fa072716d28c29C5)           |
-| safe-relayer.eth      | Ethereum  | https://safe-relayer.online                 | [0xC7c3C87603c55955100DceCA02443fBff1B15361](https://etherscan.io/address/0xC7c3C87603c55955100DceCA02443fBff1B15361)              |
-| safe-relayer.eth      | BSC       | https://bsc.safe-relayer.online             | [0xC7c3C87603c55955100DceCA02443fBff1B15361](https://bscscan.com/address/0xC7c3C87603c55955100DceCA02443fBff1B15361)               |
+| reltor.eth            | Ethereum  | https://eth.reltor.su                       | SERVICE DOWN                                                                                                                       |
+| reltor.eth            | BSC       | https://binance.reltor.su                   | SERVICE DOWN                                                                                                                       |
+| reltor.eth            | Polygon   | https://polygon.reltor.su                   | SERVICE DOWN                                                                                                                       |
+| safe-relayer.eth      | Ethereum  | https://safe-relayer.online                 | SERVICE DOWN                                                                                                                       |
+| safe-relayer.eth      | BSC       | https://bsc.safe-relayer.online             | SERVICE DOWN                                                                                                                       |
 | safe-torn.eth         | Ethereum  | https://eth3.safetorn.ovh                   | [0x0A5B2bF3cCfB44C1D22F07Eed9553eCba752D4aD](https://etherscan.io/address/0x0A5B2bF3cCfB44C1D22F07Eed9553eCba752D4aD)              |
 | safe-torn.eth         | BSC       | https://bsc3.safetorn.ovh                   | [0x0A5B2bF3cCfB44C1D22F07Eed9553eCba752D4aD](https://bscscan.com/address/0x0A5B2bF3cCfB44C1D22F07Eed9553eCba752D4aD)               |
 | safe-torn.eth         | Polygon   | https://poly3.safetorn.ovh                  | [0x0A5B2bF3cCfB44C1D22F07Eed9553eCba752D4aD](https://polygonscan.com/address/0x0A5B2bF3cCfB44C1D22F07Eed9553eCba752D4aD)           |
@@ -363,7 +375,7 @@ Last updated: March 10, 2026
 
 ## Supported Deployments
 
-Last updated: August 17, 2025
+Last checked: August 26, 2026
 
 | Chain     | Symbol | Unit    | Tornado Contract Address                                                                                                           |
 |-----------|--------|---------|------------------------------------------------------------------------------------------------------------------------------------|

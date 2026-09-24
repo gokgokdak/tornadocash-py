@@ -1,4 +1,6 @@
 zk/js/*.js linguist-generated=true
-node-darwin-arm64 filter=lfs diff=lfs merge=lfs -text
-node-linux-x86_64 filter=lfs diff=lfs merge=lfs -text
-node-windows-amd64.exe filter=lfs diff=lfs merge=lfs -text
+
+zk/groth16/_witness_program.py linguist-generated=true
+zk/tornado/circuit.json -text
+zk/tornado/proving_key.bin -text
+zk/tornado/verification_key.json -text

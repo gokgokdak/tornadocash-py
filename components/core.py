@@ -51,7 +51,7 @@ class Tornado(EventPoller.Handler):
         self.poller             : EventPoller                   = EventPoller(chain)
         self.catchup            : bool                          = False
         self.tree               : merkle_tree.Interface | None  = None
-        self.zksnark            : zk.circuit.Interface          = zk.circuit.create(zk.circuit.ImplType.JAVASCRIPT)
+        self.zksnark            : zk.circuit.Interface          = zk.circuit.create(zk.circuit.ImplType(config.ZK_BACKEND))
         self.mutex              : threading.Lock                = threading.Lock()
         self.handlers           : list[Tornado.Handler]         = []
         with open(config.TORNADO_PROXY_ABI_PATH, 'r') as f:
