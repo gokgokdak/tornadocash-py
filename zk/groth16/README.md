@@ -36,4 +36,8 @@ To verify that the checked-in AOT witness program matches the bundled circuit:
 python -m zk.groth16.generate_witness_program --check
 ```
 
+The check compares decompressed routing metadata and the remaining generated
+source, so differences between zlib and zlib-ng compression do not mark an
+otherwise identical program as stale.
+
 Regenerate the AOT module only when intentionally replacing the pinned circuit.

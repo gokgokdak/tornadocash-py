@@ -15,6 +15,7 @@ Run without ``--check`` to regenerate ``_witness_program.py`` atomically.
 from __future__ import annotations
 
 import argparse
+import ast
 import base64
 import hashlib
 import json
@@ -149,7 +150,7 @@ def _metadata(circuit: dict[str, Any]) -> str:
 
 
 def generate_source(circuit: dict[str, Any], circuit_digest: str) -> str:
-    """Return the deterministic Python source for an authenticated circuit."""
+    """Translate an authenticated circuit, compressing metadata with local zlib."""
 
     header = f'''# Generated from the production Tornado Cash Circom-1 circuit.
 # Do not edit by hand. Runtime code never reads or evaluates the embedded JavaScript.
@@ -251,6 +252,38 @@ METADATA_B85 = (\n{_metadata(circuit)}\n)\n\n'''
     return source
 
 
+def _source_contents(source: str) -> tuple[bytes, bytes]:
+    """Compare metadata contents without depending on zlib's compressed bytes.
+
+    Windows Python 3.14 uses zlib-ng, which may encode the same metadata
+    differently. Keep every byte outside the metadata assignment significant,
+    and inspect its literal without importing or executing the generated code.
+    """
+
+    assignments = [
+        node for node in ast.parse(source).body
+        if isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "METADATA_B85"
+                for target in node.targets)
+    ]
+    if len(assignments) != 1:
+        raise ValueError("expected exactly one METADATA_B85 assignment")
+    assignment = assignments[0]
+    if (len(assignment.targets) != 1
+            or not isinstance(assignment.value, ast.Constant)
+            or not isinstance(assignment.value.value, str)):
+        raise ValueError("METADATA_B85 must be a string literal")
+    metadata = zlib.decompress(base64.b85decode(assignment.value.value))
+
+    # AST columns are UTF-8 byte offsets. Preserve even code after the literal
+    # on the same line so metadata normalization cannot hide other changes.
+    encoded = source.encode("utf-8")
+    lines = encoded.splitlines(keepends=True)
+    start = sum(map(len, lines[:assignment.lineno - 1])) + assignment.col_offset
+    end = sum(map(len, lines[:assignment.end_lineno - 1])) + assignment.end_col_offset
+    return encoded[:start] + b"METADATA_B85 = ..." + encoded[end:], metadata
+
+
 def _version() -> str:
     version = getattr(esprima, "__version__", "")
     if isinstance(version, tuple):
@@ -305,10 +338,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.check:
         try:
             committed = output.read_text(encoding="utf-8")
-        except OSError as error:
+            matches = _source_contents(committed) == _source_contents(source)
+        except (OSError, ValueError, SyntaxError, zlib.error) as error:
             print(f"witness AOT check failed: {error}", file=sys.stderr)
             return 1
-        if committed != source:
+        if not matches:
             expected = hashlib.sha256(source.encode()).hexdigest()
             actual = hashlib.sha256(committed.encode()).hexdigest()
             print(
