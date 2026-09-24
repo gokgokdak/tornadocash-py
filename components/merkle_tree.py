@@ -1,8 +1,7 @@
 from enum import Enum
 from hexbytes import HexBytes
-from iden3math import Fp1
+from iden3math import field
 from iden3math import hash
-from iden3math import prime
 import threading
 
 from . import log
@@ -17,12 +16,12 @@ class Interface(object):
 
     # dec: 21888242871839275222246405745257275088548364400416034343698204186575808495617
     # hex: 30644E72E131A029B85045B68181585D2833E84879B9709143E1F593F0000001
-    FILED_SIZE: HexBytes = prime.bn254().to_bytes(32, byteorder='big')
+    FILED_SIZE: HexBytes = field.bn254.fr_modulus().to_bytes(32, byteorder='big')
 
     # dec: 21663839004416932945382355908790599225266501822907911457504978515578255421292
     # hex: 2FE54C60D3ACABF3343A35B6EBA15DB4821B340F76E741E2249685ED4899AF6C
     # zero = keccak256('tornado') % FILED_SIZE
-    fp1 = Fp1(prime.bn254())
+    fp1 = field.PrimeField(field.bn254.fr_modulus())
     digest = int.from_bytes(hash.keccak256('tornado'.encode('ascii')), byteorder='big')
     ZERO_VALUE: HexBytes = HexBytes(fp1.mod_reduce(digest).to_bytes(32, byteorder='big'))
 

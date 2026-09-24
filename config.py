@@ -1,5 +1,4 @@
 import os
-import platform
 
 from components.mytype import ChainID, Second, Symbol, TornadoUnit, chain_to_string
 
@@ -36,12 +35,11 @@ BLOCKCHAIN_LOG_EVENT_POLL_BLOCKS_PER_REQUEST: dict[ChainID, int] = {
     ChainID.SEPOLIA  : 10000,
 }
 
-# Specify Node.js runtime
-# True: Will try to use the Node.js runtime on your machine if found,
-#       Please make sure command `node` is available in your PATH environment.
-#       Otherwise, use the bundled binary under the `./zk/bin/` directory.
-# False: Only the bundled binary under the `./zk/bin/` directory will be used.
-BUNDLED_NODE_JS: bool = True
+# Zero-knowledge proof backend: "python" (default) or "javascript" (legacy).
+ZK_BACKEND: str = "python"
+
+# Only for Python backend, number of Groth16 prover threads, from 1 to 8.
+ZK_WORKERS: int = 8
 
 # Relayer fee rate in percentage, e.g., '1.8' means 1.8%
 # Increase this value manually if relayer rejects your request
@@ -55,11 +53,6 @@ MERKLE_TREE_HEIGHT: int = 20
 LOG_DIR: str = os.path.join(os.path.dirname(__file__), 'logs').replace('\\', '/')
 
 METADATA_PATH: str = os.path.join(os.path.dirname(__file__), 'metadata.json').replace('\\', '/')
-
-BUNDLED_NODE_JS_EXE: str = os.path.join(
-    os.path.dirname(__file__),
-    f"zk/bin/node-{platform.system().lower()}-{platform.machine().lower()}{'.exe' if 'window' in platform.system().lower() else ''}"
-).replace('\\', '/')
 
 DATABASE_PATHS: dict[ChainID, dict[Symbol, dict[TornadoUnit, str]]] = {
     chain: {
