@@ -7,7 +7,10 @@ import signal
 import threading
 from dataclasses import dataclass, field
 from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import quote
 
 from eth_typing import ChecksumAddress
 from hexbytes import HexBytes
@@ -353,8 +356,18 @@ async def handle_client(socket: ServerConnection, backend: Backend) -> None:
         await asyncio.gather(*tasks, return_exceptions=True)
 
 
+class HTTPHandler(SimpleHTTPRequestHandler):
+
+    def log_message(self, format: str, *args: Any) -> None:
+        log.info('HTTP', f'{self.address_string()} {format % args}'.translate(self._control_char_table))
+
+    def log_error(self, format: str, *args: Any) -> None:
+        log.error('HTTP', f'{self.address_string()} {format % args}'.translate(self._control_char_table))
+
+
 async def run() -> None:
     backend: Backend                   = Backend(config.WEBUI_CHAINS)
+    http   : ThreadingHTTPServer | None = None
     stop   : asyncio.Event             = asyncio.Event()
     loop   : asyncio.AbstractEventLoop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -365,10 +378,19 @@ async def run() -> None:
     startup: asyncio.Task[None] | None = None
     try:
         async with serve(partial(handle_client, backend=backend), config.WEBUI_HOST, config.WEBUI_WS_PORT, max_size=16_384):
+            if config.WEBUI_SERVE_UI:
+                handler = partial(HTTPHandler, directory=str(Path(__file__).parent / 'www'))
+                http = ThreadingHTTPServer((config.WEBUI_HOST, config.WEBUI_PORT), handler)
+                threading.Thread(target=http.serve_forever, daemon=True).start()
+                ws = quote(f'ws://{config.WEBUI_HOST}:{config.WEBUI_WS_PORT}', safe='')
+                print(f'Web UI: http://{config.WEBUI_HOST}:{config.WEBUI_PORT}/?ws={ws}', flush=True)
             print(f'WebSocket: ws://{config.WEBUI_HOST}:{config.WEBUI_WS_PORT}', flush=True)
             startup = asyncio.create_task(backend.start())
             await stop.wait()
     finally:
+        if http:
+            await asyncio.to_thread(http.shutdown)
+            http.server_close()
         try:
             if startup:
                 await startup
