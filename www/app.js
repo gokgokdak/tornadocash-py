@@ -36,7 +36,7 @@ function message(text, error = false) {
     $('message').textContent = text;
     $('message').dataset.error = error;
     let target = $('message');
-    for (const name of ['backup', 'wallet']) {
+    for (const name of ['backup', 'wallet', 'backup-confirm']) {
         if (!$(`${name}-dialog`).open) continue;
         target = $(`${name}-message`);
         target.textContent = text;
@@ -236,6 +236,8 @@ function updateControls() {
     $('confirm-deposit').disabled = busy;
     $('approve-token').disabled = busy;
     $('cancel-deposit').disabled = busy;
+    $('submit-deposit').disabled = busy;
+    $('back-to-note').disabled = busy;
 }
 
 async function run(action) {
@@ -319,6 +321,7 @@ async function waitReceipt(instance, hash) {
 }
 
 function closeDraft() {
+    $('backup-confirm-dialog').close();
     draft = null;
     $('deposit-note').value = '';
     $('backup-message').textContent = '';
@@ -380,12 +383,20 @@ $('deposit-panel').onsubmit = (event) => {
         $('backup-message').textContent = '';
         $('approve-token').hidden = instance.native;
         $('backup-dialog').showModal();
-        message('Save your note, then confirm the deposit.');
+        message('Save your note, then continue to confirm the deposit.');
     });
 };
 $('cancel-deposit').onclick = () => $('backup-dialog').close();
 $('backup-dialog').onclose = closeDraft;
 $('backup-dialog').oncancel = (event) => { if (busy) event.preventDefault(); };
+$('backup-confirm-dialog').oncancel = (event) => { if (busy) event.preventDefault(); };
+$('back-to-note').onclick = () => $('backup-confirm-dialog').close();
+$('confirm-deposit').onclick = () => {
+    if (busy) return;
+    if (!draft) { message('Create a deposit note first.', true); return; }
+    $('backup-confirm-message').textContent = '';
+    $('backup-confirm-dialog').showModal();
+};
 $('copy-note').onclick = async () => {
     try { await navigator.clipboard.writeText(draft.note); message('Note copied.'); }
     catch { $('deposit-note').focus(); $('deposit-note').select(); message('Select and copy the note manually.', true); }
@@ -407,14 +418,14 @@ $('approve-token').onclick = () => run(async () => {
     await sendTransaction(tx, draft.instance);
     message('Token approved. You can now deposit.');
 });
-$('confirm-deposit').onclick = () => run(async () => {
-    if (!draft) throw new Error('Create a deposit note first.');
-    if (!window.confirm('Have you saved your note? Without it, you cannot withdraw your deposit.')) return;
+$('submit-deposit').onclick = () => run(async () => {
+    if (!draft || !$('backup-confirm-dialog').open) throw new Error('Confirm that your note is saved before depositing.');
     checkBackend(draft.instance.id);
     const address = await wallet(draft.instance);
     message('Building deposit transaction…');
     const tx = await rpc('deposit', { instance: draft.instance.id, account: address, note: draft.note });
     await sendTransaction(tx, draft.instance);
+    $('backup-confirm-dialog').close();
     $('backup-dialog').close();
 });
 for (const radio of document.querySelectorAll('input[name=mode]')) radio.onchange = () => {

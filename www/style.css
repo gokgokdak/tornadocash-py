@@ -115,7 +115,7 @@ progress::-moz-progress-bar { background: var(--green); }
 #approve-token { margin-bottom: 12px; }
 #message { margin-top: 22px; overflow-wrap: anywhere; color: var(--green); }
 #message:empty { display: none; }
-#message[data-error=true], #backup-message[data-error=true], #wallet-message[data-error=true] { color: #ff728d; }
+#message[data-error=true], #backup-message[data-error=true], #wallet-message[data-error=true], #backup-confirm-message[data-error=true] { color: #ff728d; }
 footer { display: flex; justify-content: space-between; color: #6b6b6b; font-size: 12px; padding-bottom: 28px; gap: 16px; }
 dialog { width: 440px; max-width: calc(100% - 32px); padding: 24px; border: 1px solid var(--green); border-radius: 4px; color: #eee; background: var(--background); }
 dialog::backdrop { background: rgba(5, 5, 5, .86); }
@@ -126,6 +126,19 @@ dialog textarea { min-height: 140px; color: var(--green); font-size: 12px; margi
 .note-tools button { flex: 1; padding-left: 8px; padding-right: 8px; }
 .backup-check { display: flex; align-items: center; gap: 8px; margin: 22px 0 16px; font-size: 12px; }
 #backup-message { overflow-wrap: anywhere; margin: 18px 0; }
+#backup-confirm-dialog { width: 460px; max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); padding: 28px; border: 2px solid #e4b35f; border-radius: 16px; background: #17130c; box-shadow: 0 20px 100px #000b; }
+#backup-confirm-dialog::backdrop { background: #000b; backdrop-filter: blur(4px); }
+.backup-warning { display: grid; place-items: center; width: 56px; height: 56px; margin-bottom: 20px; border: 1px solid #8b642b; border-radius: 14px; background: #382a13; color: #ffd082; }
+#backup-confirm-title { margin-bottom: 16px; color: #ffd082; font-size: 22px; line-height: 1.4; }
+#backup-confirm-description { color: #c5bbaa; line-height: 1.8; }
+#backup-confirm-description strong { display: block; margin-bottom: 8px; color: #fff0d5; font-size: 15px; }
+#backup-confirm-message { overflow-wrap: anywhere; color: var(--green); font-size: 12px; }
+#backup-confirm-message:empty { display: none; }
+.backup-confirm-actions { display: grid; gap: 10px; margin-top: 24px; }
+.backup-confirm-actions button { min-height: 46px; border-radius: 8px; }
+#submit-deposit { border-color: #ffd082; background: #ffd082; color: #17130c; }
+#submit-deposit:hover:not(:disabled) { background: #ffde9e; }
+#back-to-note { border-color: #66543a; background: transparent; color: #c5bbaa; font-weight: 400; }
 #wallet-dialog { width: 460px; padding: 28px; max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); border: 1px solid #2c4436; border-radius: 24px; background: #0b120e; box-shadow: 0 24px 100px #0009; }
 #wallet-dialog::backdrop { background: #000a; backdrop-filter: blur(6px); }
 .wallet-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

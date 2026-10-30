@@ -140,7 +140,18 @@
     <div class="note-tools"><button id="download-note" class="outline" type="button">Download note</button><button id="copy-note" class="outline" type="button">Copy note</button></div>
     <p id="backup-message" role="status"></p>
     <button id="approve-token" class="outline full" type="button" hidden>Approve token</button>
-    <div class="note-tools"><button id="cancel-deposit" type="button">Cancel</button><button id="confirm-deposit" class="primary" type="button">Deposit</button></div>
+    <div class="note-tools"><button id="cancel-deposit" type="button">Cancel</button><button id="confirm-deposit" class="primary" type="button">Continue</button></div>
+  </dialog>
+
+  <dialog id="backup-confirm-dialog" role="alertdialog" aria-labelledby="backup-confirm-title" aria-describedby="backup-confirm-description">
+    <div class="backup-warning" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10.3 3.9 2.2 18a2 2 0 0 0 1.7 3h16.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 8v5m0 3v1"/></svg></div>
+    <h2 id="backup-confirm-title">Have you saved your note?</h2>
+    <p id="backup-confirm-description"><strong>Without your note, you cannot withdraw your deposit.</strong> Lost notes cannot be recovered.</p>
+    <p id="backup-confirm-message" role="status" aria-live="polite"></p>
+    <div class="backup-confirm-actions">
+      <button id="submit-deposit" type="button">I saved my note — deposit</button>
+      <button id="back-to-note" type="button" autofocus>Back to note</button>
+    </div>
   </dialog>
 </body>
 </html>
