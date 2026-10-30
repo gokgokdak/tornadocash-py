@@ -641,7 +641,8 @@ class Tornado(EventPoller.Handler):
                 raise RuntimeError(f'on_sync() failed to add synchronized data to database')
             if not self.sync_only:
                 for e in deposits:
-                    self.tree.add(e.commitment)
+                    if not self.tree.add(e.commitment):
+                        raise RuntimeError('on_sync() failed to update merkle tree')
             for h in self.handlers:
                 h.on_sync(block_from, block_to, deposits, withdrawals)
 

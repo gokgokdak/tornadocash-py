@@ -226,15 +226,16 @@ class Memory(Interface):
             return True
 
     def get_merkle_proof(self, leaf_index: int) -> MerkleProof | None:
-        root: HexBytes | None = self.root()
-        path: tuple[list[HexBytes], list[int]] | None = self.path(leaf_index)
-        if root is None or path is None:
-            return None
-        return MerkleProof(
-            root=root,
-            path_nodes=path[0],
-            path_indices=path[1]
-        )
+        with self.mutex:
+            root: HexBytes | None = self.root()
+            path: tuple[list[HexBytes], list[int]] | None = self.path(leaf_index)
+            if root is None or path is None:
+                return None
+            return MerkleProof(
+                root=root,
+                path_nodes=path[0],
+                path_indices=path[1]
+            )
 
 def create(impl: ImplType, height: int = 20, leafs: list[HexBytes] | None = None) -> Interface:
     if impl == ImplType.MEMORY:
