@@ -50,6 +50,7 @@ class Tornado(EventPoller.Handler):
         self.token_contract     : Contract | rpc.Error | None  = None
         self.poller             : EventPoller                  = EventPoller(chain)
         self.catchup            : bool                         = False
+        self.last_update_sec    : Second | None                = None
         self.tree               : merkle_tree.Interface | None = None
         self.zksnark            : zk.circuit.Interface         = zk.circuit.create(zk.circuit.ImplType(config.ZK_BACKEND))
         self.mutex              : threading.Lock               = threading.Lock()
@@ -643,6 +644,7 @@ class Tornado(EventPoller.Handler):
                 for e in deposits:
                     if not self.tree.add(e.commitment):
                         raise RuntimeError('on_sync() failed to update merkle tree')
+            self.last_update_sec = util.unix_timestamp()
             for h in self.handlers:
                 h.on_sync(block_from, block_to, deposits, withdrawals)
 
