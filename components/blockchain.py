@@ -1,5 +1,7 @@
 import threading
+import time
 from abc import ABC, abstractmethod
+from enum import Enum
 from eth_typing import ChecksumAddress
 from hexbytes import HexBytes
 from web3 import Web3
@@ -136,6 +138,13 @@ class EventWithdraw(LogEvent):
 
 class EventPoller(object):
 
+    class Activity(Enum):
+        IDLE            = 'idle'
+        FETCHING_HEAD   = 'fetching_head'
+        FETCHING_EVENTS = 'fetching_events'
+        RETRY_WAIT      = 'retry_wait'
+        PERSISTING      = 'persisting'
+
     class Handler(object):
 
         def on_first_catchup(self) -> None:
@@ -164,7 +173,14 @@ class EventPoller(object):
         self.worker        : threading.Thread | None   = None
         self.handlers      : list[EventPoller.Handler] = []
         self.poll_interval : float                     = config.BLOCKCHAIN_LOG_EVENT_POLL_INTERVAL_SEC if poll_interval is None else poll_interval
+        self.start_block   : int                       = 0
+        self.latest_block  : int | None                = None
+        self.last_check_sec: float | None              = None
         self.error         : str | None                = None
+        self.activity      : EventPoller.Activity      = EventPoller.Activity.IDLE
+        self.caught_up     : bool                      = False
+        self.deposits      : int                       = 0
+        self.withdrawals   : int                       = 0
         if self.connection is None:
             self.connection = rpc.Connection(self.chain, config.RPC_URLS[self.chain])
 
@@ -189,8 +205,11 @@ class EventPoller(object):
         with self.cond:
             self.off            = False
             self.contract       = contract
-            self.current        = start_block
-            self.error          = None
+            self.current        = self.start_block = start_block
+            self.latest_block   = self.last_check_sec = self.error = None
+            self.caught_up      = False
+            self.activity       = EventPoller.Activity.FETCHING_HEAD
+            self.deposits       = self.withdrawals = 0
             self.cond.notify_all()
         self.worker = threading.Thread(target=self._loop)
         self.worker.start()
@@ -216,6 +235,38 @@ class EventPoller(object):
     def is_started(self) -> bool:
         return not self.off
 
+    def status(self) -> dict:
+        """Progress advances only after the synchronization handlers succeed."""
+        with self.cond:
+            synced   : int | None = None if self.latest_block is None else self.current - 1
+            remaining: int | None = None if self.latest_block is None else max(0, self.latest_block - self.current + 1)
+            if self.off:
+                phase: str = 'error' if self.error else 'stopped'
+            elif self.error:
+                phase = 'retrying'
+            elif self.latest_block is None:
+                phase = 'connecting'
+            else:
+                phase = 'ready' if self.caught_up and remaining == 0 else 'syncing'
+            progress: float | None = None
+            if phase in ('syncing', 'ready'):
+                progress = float(synced >= 0) if self.latest_block == 0 else min(1.0, max(0.0, synced / self.latest_block))
+            return {
+                'running'         : not self.off,
+                'phase'           : phase,
+                'activity'        : self.activity.value,
+                'start_block'     : self.start_block,
+                'synced_block'    : synced,
+                'latest_block'    : self.latest_block,
+                'remaining_blocks': remaining,
+                'progress'        : progress,
+                'synchronized'    : phase == 'ready',
+                'last_check_sec'  : self.last_check_sec,
+                'error'           : self.error,
+                'deposits'        : self.deposits,
+                'withdrawals'     : self.withdrawals,
+            }
+
     def add_handler(self, handler: Handler) -> None:
         with self.cond:
             self.handlers.append(handler)
@@ -236,6 +287,7 @@ class EventPoller(object):
         finally:
             with self.cond:
                 self.off      = True
+                self.activity = EventPoller.Activity.IDLE
                 self.cond.notify_all()
             if not self.external and self.connection.started():
                 self.connection.stop()
@@ -246,15 +298,27 @@ class EventPoller(object):
             latest: int | rpc.Error = 0
             # Get latest block number
             while not self.off:
+                with self.cond:
+                    self.activity       = EventPoller.Activity.FETCHING_HEAD
                 latest = self.connection.latest_block_number()
                 if not rpc.is_error(latest):
                     break
-                log.error(self.tag, f'Failed to get latest block number, RPC error: {latest.code.value}')
+                with self.cond:
+                    self.error    = f'{latest.code.value}: {latest.msg}'.rstrip(': ')[:300]
+                    self.activity = EventPoller.Activity.RETRY_WAIT
+                    self.cond.notify_all()
+                log.error(self.tag, f'Failed to get latest block number, RPC error: {self.error}')
                 log.info(self.tag, f'Wait {config.RPC_RETRY_INTERVAL_SEC}s and retry')
                 util.wait(config.RPC_RETRY_INTERVAL_SEC, self.cond)
             if self.off:
                 break
-            count_block: int = latest - self.current + 1
+            with self.cond:
+                self.latest_block   = latest
+                self.last_check_sec = time.time()
+                self.error          = None
+                self.activity       = EventPoller.Activity.IDLE
+                self.cond.notify_all()
+            count_block: int = max(0, latest - self.current + 1)
 
             # Notify latest block number
             for h in self.handlers:
@@ -284,15 +348,27 @@ class EventPoller(object):
                 # Get event logs
                 event_logs: list[LogReceipt] = []
                 for expected in self.events:
+                    with self.cond:
+                        self.activity = EventPoller.Activity.FETCHING_EVENTS
                     result: list[LogReceipt] | rpc.Error = self.connection.log_receipt(ChecksumAddress(self.contract), chunk[0], chunk[1], [expected.event_hash()])
                     while not self.off:
                         if not rpc.is_error(result):
                             break
-                        log.error(self.tag, f'Failed to get logs for event {expected.event_hash().to_0x_hex()}, RPC error: {result.code.value}')
+                        with self.cond:
+                            self.error    = f'{result.code.value}: {result.msg}'.rstrip(': ')[:300]
+                            self.activity = EventPoller.Activity.RETRY_WAIT
+                            self.cond.notify_all()
+                        log.error(self.tag, f'Failed to get logs for event {expected.event_hash().to_0x_hex()}, RPC error: {self.error}')
                         log.info(self.tag, f'Wait {config.RPC_RETRY_INTERVAL_SEC}s and retry')
                         util.wait(config.RPC_RETRY_INTERVAL_SEC, self.cond)
+                        with self.cond:
+                            self.activity = EventPoller.Activity.FETCHING_EVENTS
                         result = self.connection.log_receipt(ChecksumAddress(self.contract), chunk[0], chunk[1], [expected.event_hash()])
                     if not rpc.is_error(result):
+                        with self.cond:
+                            self.error    = None
+                            self.activity = EventPoller.Activity.IDLE
+                            self.cond.notify_all()
                         event_logs.extend(result if result is not None else [])
                     if self.off:
                         break
@@ -330,11 +406,17 @@ class EventPoller(object):
                                     f'contract {self.contract}, deposit: {count_deposit}, withdraw: {count_withdraw}')
 
                 # Callback and update
+                with self.cond:
+                    self.activity = EventPoller.Activity.PERSISTING
                 for h in self.handlers:
                     h.on_sync(chunk[0], chunk[1], deposits, withdrawals)
-            # Update current block number
+                with self.cond:
+                    self.current = chunk[1] + 1
+                    self.deposits    += count_deposit
+                    self.withdrawals += count_withdraw
+                    self.activity = EventPoller.Activity.IDLE
+                    self.cond.notify_all()
             if not break_early:
-                self.current = latest + 1
                 # Notify latest block number
                 for h in self.handlers:
                     h.on_latest_block(latest)
@@ -344,6 +426,11 @@ class EventPoller(object):
                     log.info(self.tag, f'Synced to block {latest}')
                     for h in self.handlers:
                         h.on_first_catchup()
+                with self.cond:
+                    self.caught_up = True
+                    self.error     = None
+                    self.activity  = EventPoller.Activity.IDLE
+                    self.cond.notify_all()
                 # Sleep interval if no new block
                 if not self.off:
                     util.wait(Second(self.poll_interval), self.cond)
