@@ -25,6 +25,26 @@ from components.core import Tornado
 from components.mytype import ChainID, Metadata, Note, Symbol, SymbolType, TornadoUnit, chain_to_string
 
 
+STATUS_MESSAGES: dict[str, str] = {
+    'starting'    : 'Waiting to initialize.',
+    'initializing': 'Opening and checking the local database.',
+    'connecting'  : 'Waiting for a response from the blockchain RPC.',
+    'retrying'    : 'RPC request failed. Retrying; synchronization is paused.',
+    'syncing'     : 'Synchronizing deposit and withdrawal events.',
+    'ready'       : 'Synchronized with the blockchain RPC.',
+    'stopped'     : 'Event polling has stopped.',
+    'error'       : 'Backend initialization or synchronization failed.',
+}
+
+ACTIVITY_MESSAGES: dict[str, str] = {
+    'fetching_head'  : 'Fetching the latest block from RPC.',
+    'fetching_events': 'Fetching deposit and withdrawal events from RPC.',
+    'retry_wait'     : 'Waiting before the next RPC retry.',
+    'persisting'     : 'Saving events to the local database.',
+    'idle'           : '',
+}
+
+
 def encode_wallet_format_tx(value: Any) -> Any:
     """Encode Python transaction quantities for an EIP-1193 wallet."""
     if value is None:
@@ -48,7 +68,18 @@ class Instance:
     tornado          : Tornado | None               = None
     error            : str | None                   = None
     lock             : threading.Lock               = field(default_factory=threading.Lock)
+    totals           : tuple[int, int]              = (0, 0)
     phase            : str                          = 'starting'
+
+
+class Counters(Tornado.Handler):
+
+    def __init__(self, item: Instance) -> None:
+        self.item: Instance = item
+
+    def on_sync(self, block_from: int, block_to: int, deposits: list[EventDeposit], withdrawals: list[EventWithdraw]) -> None:
+        deposited, withdrawn = self.item.totals
+        self.item.totals = deposited + len(deposits), withdrawn + len(withdrawals)
 
 
 class Backend:
@@ -99,6 +130,11 @@ class Backend:
                 tornado.poller = EventPoller(chain, connection)
                 if not tornado.init(sync_only=True):
                     raise RuntimeError('Could not initialize database.')
+                totals: tuple[int, int] | None = tornado.db.get_event_counts()
+                if totals is None:
+                    raise RuntimeError('Could not read event counts.')
+                item.totals = totals
+                tornado.add_handler(Counters(item))
                 if not tornado.start_sync():
                     raise RuntimeError('Could not start synchronization.')
                 item.tornado = tornado
@@ -112,26 +148,54 @@ class Backend:
         rows: list[dict[str, Any]] = []
         for name, item in self.instances.items():
             meta: Metadata = self.metadata[item.chain]
-            phase: str = item.tornado.poller.status()['phase'] if item.tornado else ('error' if item.error else item.phase)
+            tornado: Tornado | None = item.tornado
+            deposited, withdrawn = item.totals
+            sync: dict[str, Any] = tornado.poller.status() if tornado else {
+                'synced_block'    : None,
+                'latest_block'    : None,
+                'start_block'     : None,
+                'remaining_blocks': None,
+                'progress'        : None,
+                'deposits'        : 0,
+                'withdrawals'     : 0,
+                'error'           : item.error,
+            }
+            if tornado:
+                phase: str = sync['phase']
+            else:
+                phase = 'error' if item.error else item.phase
+            ready   : bool       = phase == 'ready'
+            activity: str | None = sync.get('activity')
+            state   : str        = phase
+            message : str        = STATUS_MESSAGES[phase]
+            if phase not in ('syncing', 'ready'):
+                sync['progress'] = sync['remaining_blocks'] = None
             rows.append({
-                'id'      : name,
-                'chain'   : chain_to_string(item.chain),
-                'chain_id': item.chain.value,
-                'symbol'  : item.symbol.value,
-                'unit'    : item.unit.value,
-                'address' : meta.deployment[item.symbol][item.unit][0],
-                'decimals': meta.decimals[item.symbol],
-                'native'  : util.get_symbol_type(item.symbol) == SymbolType.NATIVE,
-                'state'   : phase,
-                'ready'   : phase == 'ready',
-                'error'   : item.error,
+                **sync,
+                'id'                : name,
+                'chain'             : chain_to_string(item.chain),
+                'chain_id'          : item.chain.value,
+                'symbol'            : item.symbol.value,
+                'unit'              : item.unit.value,
+                'address'           : meta.deployment[item.symbol][item.unit][0],
+                'decimals'          : meta.decimals[item.symbol],
+                'native'            : util.get_symbol_type(item.symbol) == SymbolType.NATIVE,
+                'deposits_total'    : deposited,
+                'withdrawals_total' : withdrawn,
+                'anonymity_set'     : deposited,
+                'last_update_sec'   : tornado.last_update_sec if tornado else None,
+                'state'             : state,
+                'sync_state'        : phase,
+                'ready'             : ready,
+                'message'           : message,
+                'activity'          : ACTIVITY_MESSAGES.get(activity, ''),
             })
         return {
-            'type'            : 'status',
-            'ready'           : not self.stopping and bool(rows) and all(row['ready'] for row in rows),
-            'stopping'        : self.stopping,
-            'instances'       : rows,
-            'relayer_fee_rate': config.RELAYER_FEE_RATE,
+            'type'                    : 'status',
+            'ready'                   : not self.stopping and bool(rows) and all(row['ready'] for row in rows),
+            'stopping'                : self.stopping,
+            'instances'               : rows,
+            'relayer_fee_rate'        : config.RELAYER_FEE_RATE,
         }
 
     def dispatch(self, method: str, params: dict[str, Any], cancelled: threading.Event | None = None) -> dict[str, Any]:
