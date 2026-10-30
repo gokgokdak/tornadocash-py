@@ -28,6 +28,8 @@
 
 # TornadoCash-py
 
+![Local WebUI](/assets/readme_home.png)
+
 A Python implementation to interact with Tornado Cash smart contracts.  
 
 Similar to the original [tornado-cli](https://github.com/tornadocash/tornado-cli), but more features and better experience
@@ -41,7 +43,8 @@ Similar to the original [tornado-cli](https://github.com/tornadocash/tornado-cli
   - [Zero-knowledge proof runtime (Optional)](#zero-knowledge-proof-runtime-optional)
 - [Running Unittests](#running-unittests)
 - [Functionality Testing](#functionality-testing)
-- [Usage & Tutorial](#usage--tutorial)
+- [WebUI](#webui)
+- [CLI Usage & Tutorial](#cli-usage--tutorial)
   - [Deposit](#deposit)
   - [Batch Deposit](#batch-deposit)
   - [Offline Deposit](#offline-deposit)
@@ -140,7 +143,28 @@ Google 👉 [https://cloud.google.com/application/web3/faucet/ethereum/sepolia](
 QuickNode 👉 [https://faucet.quicknode.com/ethereum/sepolia](https://faucet.quicknode.com/ethereum/sepolia)  
 
 
-## Usage & Tutorial
+## WebUI
+
+<p align="center">
+  <img src="/assets/readme_webui_1_deposit.png" alt="Deposit" width="32%">
+  <img src="/assets/readme_webui_2_deposit.png" alt="Withdraw" width="32%">
+  <img src="/assets/readme_webui_3_withdraw.png" alt="Withdraw" width="32%">
+</p>
+
+Configure networks and ports with `WEBUI_*` in `config.py` then start the local WebUI:  
+
+```bash
+python webui.py
+```
+
+Connect through a browser wallet or **WalletConnect**. For WalletConnect, set `WEBUI_WALLETCONNECT_PROJECT_ID` in `config.py`.  
+
+Back up your note before depositing and keep it private. ERC20 deposits may require a separate approval transaction.  
+
+**Local use only:** keep `WEBUI_HOST = '127.0.0.1'`. Do not expose the service to a LAN or the public Internet.  
+
+
+## CLI Usage & Tutorial
 
 ### Deposit
 
