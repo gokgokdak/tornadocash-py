@@ -55,6 +55,26 @@ def test_deposit_builds_an_unsigned_native_transaction(tornado: core.Tornado, no
     tornado.connection.send_transaction.assert_not_called()
 
 
+def test_deposit_reports_only_the_steps_it_runs(tornado: core.Tornado, note: Note) -> None:
+    messages: list[str] = []
+    tornado.handlers = [SimpleNamespace(on_progress=messages.append)]
+
+    assert tornado.deposit_tx(note.commitment, ACCOUNT) is not None
+    assert messages == ['Fetching deposit transaction nonce', 'Building deposit transaction']
+    messages.clear()
+    assert tornado.deposit_tx(note.commitment, ACCOUNT, nonce=7) is not None
+    assert messages == ['Building deposit transaction']
+    tornado.connection.nonce.assert_called_once_with(ACCOUNT)
+
+
+def test_progress_uses_a_handler_snapshot(tornado: core.Tornado) -> None:
+    observe: Mock = Mock()
+    tornado.handlers = [SimpleNamespace(on_progress=lambda _: tornado.handlers.clear()), SimpleNamespace(on_progress=observe)]
+    tornado._progress('Building deposit transaction')
+    observe.assert_called_once_with('Building deposit transaction')
+    assert not tornado.handlers
+
+
 def test_erc20_builds_without_preflight_queries_or_automatic_approval(tornado: core.Tornado, note: Note) -> None:
     tornado.symbol = Symbol.DAI
     tx = tornado.deposit_tx(note.commitment, ACCOUNT)
@@ -263,6 +283,33 @@ def test_prepare_rejects_invalid_proof(tornado: core.Tornado, note: Note) -> Non
     core.rpc.contract_call.assert_not_called()
 
 
+@pytest.mark.parametrize('proof_available', [True, False])
+def test_proof_progress_precedes_work_and_stops_on_failure(tornado: core.Tornado, note: Note, proof_available: bool) -> None:
+    messages: list[str] = []
+    tornado.handlers = [SimpleNamespace(on_progress=messages.append)]
+    proof: dict[str, Any] = tornado.zksnark.prove.return_value
+
+    def prove(circuit: CircuitInput) -> dict[str, Any] | None:
+        assert messages[-1] == 'Generating zero-knowledge proof'
+        assert not tornado.mutex.locked()
+        return proof if proof_available else None
+
+    def verify(value: dict[str, Any]) -> bool:
+        assert messages[-1] == 'Verifying zero-knowledge proof'
+        return value is proof
+
+    tornado.zksnark.prove.side_effect = prove
+    tornado.zksnark.verify.side_effect = verify
+    prepared = tornado.prepare_withdraw(note, RECIPIENT)
+    assert (prepared is not None) == proof_available
+    expected: list[str] = ['Reading Merkle path', 'Generating zero-knowledge proof']
+    if proof_available:
+        expected += ['Verifying zero-knowledge proof']
+    else:
+        tornado.zksnark.verify.assert_not_called()
+    assert messages == expected
+
+
 def test_withdraw_rejects_invalid_key_or_relayer_type(tornado: core.Tornado, note: Note, monkeypatch: pytest.MonkeyPatch) -> None:
     get = Mock()
     monkeypatch.setattr(core.requests, 'get', get)
@@ -344,3 +391,21 @@ def test_direct_withdraw_still_signs_and_sends(tornado: core.Tornado, note: Note
     tornado.note_deposited.assert_not_called()
     tornado.note_withdrawn.assert_not_called()
     core.rpc.contract_call.assert_not_called()
+
+
+def test_relayer_reports_submission_and_job_stages(tornado: core.Tornado, note: Note, monkeypatch: pytest.MonkeyPatch) -> None:
+    get, post = relayer_requests(tornado, monkeypatch)
+    messages: list[str] = []
+    tornado.handlers = [SimpleNamespace(on_progress=messages.append)]
+    response: Any = post.return_value
+
+    def submit(*args: Any, **kwargs: Any) -> Any:
+        assert messages[-1] == 'Submitting withdrawal to relayer'
+        return response
+
+    post.side_effect = submit
+    assert tornado.withdraw(note, RECIPIENT, 'https://relayer.example') == HASH
+    assert messages[:2] == ['Fetching relayer status', 'Calculating relayer fee']
+    assert messages[-4:] == ['Submitting withdrawal to relayer', 'Waiting for relayer job',
+                             'Checking relayer job: attempt 1/10', 'Relayer job: confirmed']
+    assert all(RECIPIENT not in message and 'relayer.example' not in message for message in messages)
