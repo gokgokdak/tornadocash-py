@@ -1,3 +1,8 @@
 PT Mono fonts and logo: Tornado Cash Classic UI, MIT License.
 https://github.com/tornadocash/tornado-classic-ui/tree/a83fae0772c8da084c0e76b3a756b456f5b9f5bb
 Original copyright notice and license are preserved in LICENSE.
+
+Wallet icons (MetaMask, OneKey, Rabby and WalletConnect): RainbowKit, MIT License.
+https://github.com/rainbow-me/rainbowkit/tree/03360ee924cfa6af13ff1d623b356bf5a170348e/packages/rainbowkit/src/wallets/walletConnectors
+Original copyright notice and license are preserved in wallets/LICENSE.
+Wallet names and brand marks belong to their respective owners.
