@@ -42,6 +42,15 @@ ACTIVITY_MESSAGES: dict[str, str] = {
     'retry_wait'     : 'Waiting before the next RPC retry.',
     'persisting'     : 'Saving events to the local database.',
     'idle'           : '',
+    'creating_note'  : 'Creating a note.',
+    'checking_note'  : 'Checking the note on chain.',
+    'checking_tx'    : 'Checking the transaction receipt.',
+    'syncing'        : 'Syncing with the blockchain RPC.',
+    'building_tree'  : 'Preparing the withdrawal Merkle tree.',
+    'proving'        : 'Preparing and verifying the withdrawal proof.',
+    'relaying'       : 'Preparing and submitting the relayer withdrawal.',
+    'approving'      : 'Building the token approval transaction.',
+    'depositing'     : 'Building the deposit transaction.',
 }
 
 
@@ -70,6 +79,9 @@ class Instance:
     lock             : threading.Lock               = field(default_factory=threading.Lock)
     totals           : tuple[int, int]              = (0, 0)
     phase            : str                          = 'starting'
+    activity         : str | None                   = None
+    progress         : str | None                   = None
+    progress_callback: Callable[[str], None] | None = None
 
 
 class Counters(Tornado.Handler):
@@ -80,6 +92,11 @@ class Counters(Tornado.Handler):
     def on_sync(self, block_from: int, block_to: int, deposits: list[EventDeposit], withdrawals: list[EventWithdraw]) -> None:
         deposited, withdrawn = self.item.totals
         self.item.totals = deposited + len(deposits), withdrawn + len(withdrawals)
+
+    def on_progress(self, message: str) -> None:
+        callback: Callable[[str], None] | None = self.item.progress_callback
+        if callback is not None:
+            callback(message)
 
 
 class Backend:
@@ -165,9 +182,12 @@ class Backend:
             else:
                 phase = 'error' if item.error else item.phase
             ready   : bool       = phase == 'ready'
-            activity: str | None = sync.get('activity')
+            activity: str | None = item.activity or sync.get('activity')
             state   : str        = phase
-            message : str        = STATUS_MESSAGES[phase]
+            working : bool       = bool(item.activity) and phase not in ('error', 'stopped')
+            if working:
+                state = activity if activity in ('syncing', 'building_tree', 'proving', 'relaying') else 'working'
+            message: str = (item.progress or ACTIVITY_MESSAGES[activity]) if working else STATUS_MESSAGES[phase]
             if phase not in ('syncing', 'ready'):
                 sync['progress'] = sync['remaining_blocks'] = None
             rows.append({
@@ -189,6 +209,8 @@ class Backend:
                 'ready'             : ready,
                 'message'           : message,
                 'activity'          : ACTIVITY_MESSAGES.get(activity, ''),
+                'sync_activity'     : ACTIVITY_MESSAGES.get(sync.get('activity'), ''),
+                'operation_progress': item.progress if working else None,
             })
         return {
             'type'                    : 'status',
@@ -198,7 +220,8 @@ class Backend:
             'relayer_fee_rate'        : config.RELAYER_FEE_RATE,
         }
 
-    def dispatch(self, method: str, params: dict[str, Any], cancelled: threading.Event | None = None) -> dict[str, Any]:
+    def dispatch(self, method: str, params: dict[str, Any], cancelled: threading.Event | None = None,
+                 progress: Callable[[str], None] | None = None) -> dict[str, Any]:
         if method == 'status':
             return self.status()
 
@@ -247,28 +270,42 @@ class Backend:
         if not item.lock.acquire(blocking=False):
             raise ValueError('Instance is busy. Please wait for the current operation.')
 
+        def report(message: str) -> None:
+            if item.progress_callback is not report:
+                return
+            check_cancelled()
+            item.progress = message
+            if progress:
+                progress(message)
 
         try:
+            item.progress_callback = report
             check_cancelled()
             if method == 'create_note':
-                return self._create_note(item, check_cancelled)
+                return self._create_note(item, check_cancelled, report)
             if method == 'receipt':
-                return self._receipt(item, params['hash'], check_cancelled)
+                return self._receipt(item, params['hash'], check_cancelled, report)
             if method == 'note_status':
-                return self._note_status(item, name, note, check_cancelled)
+                return self._note_status(item, name, note, check_cancelled, report)
             if method in ('withdraw', 'relay_withdraw'):
-                self._prepare_tree(item, cancelled, check_cancelled)
+                self._prepare_tree(item, cancelled, check_cancelled, report)
             if method == 'approve':
-                return self._approve(item, addresses['account'], check_cancelled)
+                return self._approve(item, addresses['account'], check_cancelled, report)
             if method == 'deposit':
-                return self._deposit(item, note, addresses['account'], check_cancelled)
+                return self._deposit(item, note, addresses['account'], check_cancelled, report)
             if method == 'withdraw':
-                return self._withdraw(item, note, addresses['account'], addresses['recipient'], check_cancelled)
-            return self._relay_withdraw(item, note, addresses['recipient'], params['relayer'], cancelled, check_cancelled)
+                return self._withdraw(item, note, addresses['account'], addresses['recipient'], check_cancelled, report)
+            return self._relay_withdraw(item, note, addresses['recipient'], params['relayer'], cancelled, check_cancelled, report)
         finally:
+            item.progress_callback = None
+            item.progress = None
+            item.activity = None
             item.lock.release()
 
-    def _create_note(self, item: Instance, check_cancelled: Callable[[], None]) -> dict[str, Any]:
+    def _create_note(self, item: Instance, check_cancelled: Callable[[], None],
+                     report: Callable[[str], None]) -> dict[str, Any]:
+        item.activity = 'creating_note'
+        report(ACTIVITY_MESSAGES['creating_note'])
         note: Note = Note.create()
         check_cancelled()
         return {
@@ -276,7 +313,10 @@ class Backend:
             'invoice': Note.to_invoice(item.chain, item.symbol, item.unit, note),
         }
 
-    def _receipt(self, item: Instance, tx_hash: str, check_cancelled: Callable[[], None]) -> dict[str, Any]:
+    def _receipt(self, item: Instance, tx_hash: str, check_cancelled: Callable[[], None],
+                 report: Callable[[str], None]) -> dict[str, Any]:
+        item.activity = 'checking_tx'
+        report(ACTIVITY_MESSAGES['checking_tx'])
         if not re.fullmatch(r'0x[0-9a-fA-F]{64}', tx_hash):
             raise ValueError('Invalid transaction hash.')
         tornado: Tornado = item.tornado
@@ -288,7 +328,10 @@ class Backend:
             raise RuntimeError(f'Receipt RPC error: {result.code.value}.')
         return {'status': 'confirmed' if result['status'] == 1 else 'failed'}
 
-    def _note_status(self, item: Instance, name: str, note: Note, check_cancelled: Callable[[], None]) -> dict[str, Any]:
+    def _note_status(self, item: Instance, name: str, note: Note, check_cancelled: Callable[[], None],
+                     report: Callable[[str], None]) -> dict[str, Any]:
+        item.activity = 'checking_note'
+        report(ACTIVITY_MESSAGES['checking_note'])
         tornado: Tornado = item.tornado
         deposited = tornado.note_deposited(note.commitment)
         spent = tornado.note_withdrawn(note.nullifier_hash)
@@ -305,10 +348,12 @@ class Backend:
         }
 
     def _prepare_tree(self, item: Instance, cancelled: threading.Event | None,
-                      check_cancelled: Callable[[], None]) -> None:
+                      check_cancelled: Callable[[], None], report: Callable[[str], None]) -> None:
         tornado: Tornado = item.tornado
 
         def wait_sync(refresh: bool = False) -> None:
+            item.activity = 'syncing'
+            report(ACTIVITY_MESSAGES['syncing'])
             if not tornado.poller.wait_sync(cancel=lambda: self.stopping or (cancelled is not None and cancelled.is_set()),
                                            refresh=refresh):
                 check_cancelled()
@@ -317,11 +362,16 @@ class Backend:
 
         # Check a new head once; reuse it after initializing the tree.
         wait_sync(refresh=True)
+        item.activity = 'building_tree'
+        report(ACTIVITY_MESSAGES['building_tree'])
         if not tornado.init(sync_only=False):
             raise RuntimeError('Could not initialize the withdrawal tree. Check backend logs.')
         wait_sync()
 
-    def _approve(self, item: Instance, account: ChecksumAddress, check_cancelled: Callable[[], None]) -> dict[str, Any]:
+    def _approve(self, item: Instance, account: ChecksumAddress, check_cancelled: Callable[[], None],
+                 report: Callable[[str], None]) -> dict[str, Any]:
+        item.activity = 'approving'
+        report(ACTIVITY_MESSAGES['approving'])
         if util.get_symbol_type(item.symbol) != SymbolType.ERC20:
             raise ValueError('Native currency does not require approval.')
         tornado: Tornado = item.tornado
@@ -329,14 +379,19 @@ class Backend:
         check_cancelled()
         return encode_wallet_format_tx(result)
 
-    def _deposit(self, item: Instance, note: Note, account: ChecksumAddress, check_cancelled: Callable[[], None]) -> dict[str, Any]:
+    def _deposit(self, item: Instance, note: Note, account: ChecksumAddress, check_cancelled: Callable[[], None],
+                 report: Callable[[str], None]) -> dict[str, Any]:
+        item.activity = 'depositing'
+        report(ACTIVITY_MESSAGES['depositing'])
         tornado: Tornado = item.tornado
         result = tornado.deposit_tx(note.commitment, account)
         check_cancelled()
         return encode_wallet_format_tx(result)
 
     def _withdraw(self, item: Instance, note: Note, account: ChecksumAddress, recipient: ChecksumAddress,
-                  check_cancelled: Callable[[], None]) -> dict[str, Any]:
+                  check_cancelled: Callable[[], None], report: Callable[[str], None]) -> dict[str, Any]:
+        item.activity = 'proving'
+        report(ACTIVITY_MESSAGES['proving'])
         tornado: Tornado = item.tornado
         proof = tornado.prepare_withdraw(note, recipient)
         check_cancelled()
@@ -347,7 +402,10 @@ class Backend:
         return encode_wallet_format_tx(result)
 
     def _relay_withdraw(self, item: Instance, note: Note, recipient: ChecksumAddress, relayer: str,
-                        cancelled: threading.Event | None, check_cancelled: Callable[[], None]) -> dict[str, Any]:
+                        cancelled: threading.Event | None, check_cancelled: Callable[[], None],
+                        report: Callable[[str], None]) -> dict[str, Any]:
+        item.activity = 'relaying'
+        report('Checking relayer status.')
         tornado: Tornado = item.tornado
         tx_hash = tornado.withdraw(
             note, recipient, relayer,
@@ -378,6 +436,26 @@ class Backend:
 async def handle_client(socket: ServerConnection, backend: Backend) -> None:
     cancelled: threading.Event = threading.Event()
 
+    async def dispatch_request(request_id: str | int, method: str, params: Any) -> dict[str, Any]:
+        queue: asyncio.Queue[str | None] = asyncio.Queue()
+        loop: asyncio.AbstractEventLoop = asyncio.get_running_loop()
+        active: bool = True
+
+        def progress(message: str) -> None:
+            if active and not cancelled.is_set():
+                loop.call_soon_threadsafe(queue.put_nowait, message)
+
+        async def publish_progress() -> None:
+            while (message := await queue.get()) is not None:
+                await socket.send(json.dumps({'id': request_id, 'type': 'progress', 'message': message}))
+
+        publisher: asyncio.Task[None] = asyncio.create_task(publish_progress())
+        try:
+            return await asyncio.to_thread(backend.dispatch, method, params, cancelled, progress)
+        finally:
+            active = False
+            queue.put_nowait(None)
+            await publisher
 
     async def publish() -> None:
         last_log_id: int  = 0
@@ -406,7 +484,7 @@ async def handle_client(socket: ServerConnection, backend: Backend) -> None:
                 method: str | None = request.get('method')
                 if not isinstance(method, str):
                     raise ValueError('Request requires a method.')
-                result  : dict[str, Any] = await asyncio.to_thread(backend.dispatch, method, request.get('params', {}), cancelled)
+                result  : dict[str, Any] = await dispatch_request(request_id, method, request.get('params', {}))
                 response: dict[str, Any] = {'id': request_id, 'result': result}
             except (ValueError, RuntimeError) as error:
                 response = {'id': request_id, 'error': str(error)}
