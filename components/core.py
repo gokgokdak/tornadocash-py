@@ -133,7 +133,11 @@ class Tornado(EventPoller.Handler):
                     return False
                 try:
                     self._progress('Preparing Merkle tree')
-                    self.tree = merkle_tree.create(merkle_tree.ImplType.MEMORY, config.MERKLE_TREE_HEIGHT, commitments)
+                    self.tree = merkle_tree.create(
+                        merkle_tree.ImplType.MEMORY, config.MERKLE_TREE_HEIGHT, commitments,
+                        lambda level, height, completed, total: self._progress(
+                            f'Rebuilding Merkle tree: level {level}/{height} · {completed:,}/{total:,} nodes')
+                    )
                 except ValueError:
                     log.error(self.tag, 'init() failed to rebuild the merkle tree')
                     return False

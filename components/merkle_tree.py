@@ -3,6 +3,8 @@ from hexbytes import HexBytes
 from iden3math import field
 from iden3math import hash
 import threading
+import time
+from typing import Protocol
 
 from . import log
 from .mytype import MerkleProof
@@ -10,6 +12,18 @@ from .mytype import MerkleProof
 
 class ImplType(Enum):
     MEMORY = 'memory'
+
+
+class ProgressCallback(Protocol):
+
+    def __call__(self, level: int, height: int, completed: int, total: int, /) -> None:
+        """Report Merkle tree rebuild progress.
+        @param  level       Current hashing level, starting at 1
+        @param  height      Total number of hashing levels
+        @param  completed   Parent nodes generated in this level; starts at 0
+        @param  total       Total parent nodes to generate in this level
+        """
+        ...
 
 
 class Interface(object):
@@ -85,7 +99,7 @@ class Interface(object):
 
 class Memory(Interface):
 
-    def __init__(self, height: int, leafs: list[HexBytes] | None = None) -> None:
+    def __init__(self, height: int, leafs: list[HexBytes] | None = None, on_progress: ProgressCallback | None = None) -> None:
         super().__init__(ImplType.MEMORY)
         self.TAG      : str                  = f'MerkleTree.{__class__.__name__}'
         self.mutex    : threading.RLock      = threading.RLock()
@@ -98,16 +112,23 @@ class Memory(Interface):
         for i in range(1, self.height):
             self.zeros.append(HexBytes(hash.mimc_sponge([self.zeros[i - 1], self.zeros[i - 1]], 1, b'')[0]))
         if leafs is not None and len(leafs) > 0:
-            if not self._bulk_initialize(leafs):
+            if not self._bulk_initialize(leafs, on_progress):
                 raise ValueError(f'Illegal leafs')
 
     # Do not call this function directly, use constructor instead
-    def _bulk_initialize(self, leafs: list[HexBytes]) -> bool:
+    def _bulk_initialize(self, leafs: list[HexBytes], on_progress: ProgressCallback | None = None) -> bool:
         if len(leafs) > self.capacity:
             log.error(self.TAG, f'Tree capacity exceeded: {len(leafs)} > {self.capacity}')
             return False
         self.layers[0] = leafs
         for level in range(self.height):
+            # First progress callback
+            total        : int   = (len(self.layers[level]) + 1) // 2
+            last_progress: float = 0.0
+            if on_progress is not None:
+                on_progress(level + 1, self.height, 0, total)
+                last_progress = time.monotonic()
+            # Rebuild nodes in the layer
             for node in range(len(self.layers[level])):
                 if not Interface.is_left(node):
                     continue
@@ -124,6 +145,13 @@ class Memory(Interface):
                         return False
                 else:
                     self.layers[level + 1].append(parent)
+                # Progress callback each 250ms or at completed
+                if on_progress is not None:
+                    completed: int   = node // 2 + 1
+                    now      : float = time.monotonic()
+                    if completed == total or now - last_progress >= 0.25:
+                        on_progress(level + 1, self.height, completed, total)
+                        last_progress = now
             log.info(self.TAG, f'Level {level} rebuilt, size: {len(self.layers[level])}')
         self._size = len(leafs)
         return True
@@ -237,8 +265,8 @@ class Memory(Interface):
                 path_indices=path[1]
             )
 
-def create(impl: ImplType, height: int = 20, leafs: list[HexBytes] | None = None) -> Interface:
+def create(impl: ImplType, height: int = 20, leafs: list[HexBytes] | None = None, on_progress: ProgressCallback | None = None) -> Interface:
     if impl == ImplType.MEMORY:
-        return Memory(height, leafs)
+        return Memory(height, leafs, on_progress)
     else:
         raise NotImplementedError
