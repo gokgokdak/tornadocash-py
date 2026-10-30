@@ -9,7 +9,8 @@ const providers = new WeakSet();
 const states = {
     starting: 'Starting', connecting: 'Connecting RPC', retrying: 'Retrying RPC',
     initializing: 'Initializing', syncing: 'Syncing', ready: 'Ready', error: 'Error',
-    stopped: 'Stopped',
+    stopped: 'Stopped', building_tree: 'Building tree',
+    proving: 'Generating proof', relaying: 'Submitting to relayer', working: 'Working',
 };
 const stateLabel = (state) => states[state] || state?.replaceAll('_', ' ') || 'Starting';
 const noteId = (note) => (note || '').trim().split('-').slice(0, 3).join('-').toLowerCase();
@@ -72,6 +73,10 @@ function connect() {
         }
         const request = pending.get(result.id);
         if (!request) return;
+        if (result.type === 'progress') {
+            if (busy && typeof result.message === 'string') message(result.message);
+            return;
+        }
         pending.delete(result.id);
         if (result.error) request.reject(new Error(result.error));
         else request.resolve(result.result);
@@ -173,6 +178,7 @@ function renderStatus() {
         state.dataset.state = connected ? item.state : 'error';
         if (connected && item.message) state.append(element('small', item.message, 'instance-message'));
         if (connected && item.activity && item.activity !== item.message) state.append(element('small', item.activity, 'instance-message'));
+        if (connected && item.sync_activity && item.sync_activity !== item.activity) state.append(element('small', item.sync_activity, 'instance-message'));
         const sync = element('td', null, 'sync');
         if (hasProgress(item)) {
             sync.textContent = `${number(item.synced_block)} / ${number(item.latest_block)}`;

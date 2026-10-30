@@ -402,6 +402,8 @@ def test_proof_waits_before_and_after_tree_building_without_blocking_sync(backen
             assert entered.wait(1)
             row: dict[str, Any] = backend.status()['instances'][0]
             assert row['state'] == row['sync_state'] == 'syncing'
+            assert row['message'] == webui.ACTIVITY_MESSAGES['syncing']
+            assert row['sync_activity'] == webui.ACTIVITY_MESSAGES['fetching_events']
             assert not row['ready']
             tornado.init.assert_not_called()
             assert backend.dispatch('approve', {**PARAMS, 'instance': 'ethereum-dai-10'}) == {'from': ACCOUNT}
@@ -471,6 +473,7 @@ def test_withdrawal_wakes_idle_poller_before_proving(backend: webui.Backend, ope
                 assert not pending.done()
                 row = backend.status()['instances'][0]
                 assert row['state'] == row['sync_state'] == 'syncing' and not row['ready']
+                assert row['message'] == webui.ACTIVITY_MESSAGES['syncing']
                 backend.instances[INSTANCE].tornado.init.assert_not_called()
                 operation.assert_not_called()
                 release.set()
@@ -499,6 +502,104 @@ def test_stopped_sync_cannot_start_proof(backend: webui.Backend, operations: dic
     backend.instances[INSTANCE].tornado.init.assert_not_called()
     operations['prepare_withdraw'].assert_not_called()
     operations['withdraw'].assert_not_called()
+    assert not backend.instances[INSTANCE].lock.locked()
+
+
+@pytest.mark.parametrize(('method', 'callbacks'), [
+    ('approve', {'approve_tx': 'approving'}),
+    ('deposit', {'deposit_tx': 'depositing'}),
+    ('withdraw', {'init': 'building_tree', 'prepare_withdraw': 'proving'}),
+    ('relay_withdraw', {'init': 'building_tree', 'withdraw': 'relaying'}),
+])
+def test_operation_activity_does_not_change_sync_readiness(backend: webui.Backend, operations: dict[str, Mock],
+                                                           method: str, callbacks: dict[str, str]) -> None:
+    tornado: FakeTornado = backend.instances[INSTANCE].tornado
+    observed: list[str] = []
+
+    def check_activity(state: str, result: Any, *args: Any, **kwargs: Any) -> Any:
+        status: dict[str, Any] = backend.status()
+        row: dict[str, Any] = status['instances'][0]
+        assert status['ready'] and row['ready']
+        assert row['sync_state'] == 'ready'
+        assert row['state'] == (state if state in ('building_tree', 'proving', 'relaying') else 'working')
+        assert row['activity'] == webui.ACTIVITY_MESSAGES[state]
+        assert row['message'] == row['operation_progress']
+        observed.append(state)
+        return result
+
+    for callback, state in callbacks.items():
+        operation: Mock = getattr(tornado, callback)
+        result: Any = operation.return_value
+        operation.side_effect = lambda *args, state=state, result=result, **kwargs: check_activity(state, result, *args, **kwargs)
+    backend.dispatch(method, PARAMS)
+    assert observed == list(callbacks.values())
+    row: dict[str, Any] = backend.status()['instances'][0]
+    assert row['state'] == row['sync_state'] == 'ready'
+    assert row['activity'] == webui.ACTIVITY_MESSAGES['idle']
+
+
+@pytest.mark.parametrize('outcome', ['success', 'error', 'cancelled', 'callback_error'])
+def test_operation_progress_cleanup_and_request_isolation(backend: webui.Backend, operations: dict[str, Mock], outcome: str) -> None:
+    item: webui.Instance = backend.instances[INSTANCE]
+    counter: webui.Counters = webui.Counters(item)
+    cancelled: threading.Event = threading.Event()
+    stages, saved = [], []
+
+    def progress(message: str) -> None:
+        assert backend.status()['instances'][0]['operation_progress'] == message
+        stages.append(message)
+        if outcome == 'callback_error' and message == 'First request stage':
+            raise RuntimeError('Viewer failed')
+
+    def operation(*args: Any) -> dict[str, str]:
+        saved.append(item.progress_callback)
+        counter.on_progress('First request stage')
+        webui.Counters(backend.instances['ethereum-dai-10']).on_progress('Other instance stage')
+        if outcome == 'error':
+            raise RuntimeError('Operation failed')
+        if outcome == 'cancelled':
+            cancelled.set()
+        return {'from': ACCOUNT}
+
+    operations['approve_tx'].side_effect = operation
+    if outcome == 'success':
+        assert backend.dispatch('approve', PARAMS, cancelled, progress) == {'from': ACCOUNT}
+    else:
+        with pytest.raises((ValueError, RuntimeError)):
+            backend.dispatch('approve', PARAMS, cancelled, progress)
+    assert 'First request stage' in stages and 'Other instance stage' not in stages
+    assert item.progress_callback is item.progress is item.activity is None
+    assert backend.status()['instances'][0]['operation_progress'] is None
+    assert not item.lock.locked()
+    prior: list[str] = stages.copy()
+    counter.on_progress('After completion')
+    saved[0]('Late first request stage')
+    assert stages == prior
+
+    def second(*args: Any) -> dict[str, str]:
+        saved[0]('Late first request stage')
+        counter.on_progress('Second request stage')
+        return {'from': ACCOUNT}
+
+    operations['approve_tx'].side_effect = second
+    next_stages: list[str] = []
+    backend.dispatch('approve', PARAMS, progress=next_stages.append)
+    assert 'Second request stage' in next_stages and 'Late first request stage' not in next_stages
+    assert stages == prior
+
+
+def test_sync_failure_stays_visible_during_operation(backend: webui.Backend, operations: dict[str, Mock]) -> None:
+    def lose_sync(*args: Any) -> dict[str, str]:
+        backend.instances[INSTANCE].tornado.poller.state.update(error='RPC failed', synchronized=False)
+        status: dict[str, Any] = backend.status()
+        row: dict[str, Any] = status['instances'][0]
+        assert row['state'] == 'working' and row['sync_state'] == 'retrying'
+        assert row['error'] == 'RPC failed'
+        assert not row['ready'] and not status['ready']
+        return {'from': ACCOUNT}
+
+    operations['approve_tx'].side_effect = lose_sync
+    assert backend.dispatch('approve', PARAMS) == {'from': ACCOUNT}
     assert not backend.instances[INSTANCE].lock.locked()
 
 
@@ -819,6 +920,83 @@ def test_websocket_routes_create_note_to_python_backend(backend: webui.Backend) 
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize('failure', [False, True])
+def test_websocket_progress_is_live_isolated_and_drained_before_result(backend: webui.Backend, operations: dict[str, Mock], failure: bool) -> None:
+    release: threading.Event = threading.Event()
+    first: str = 'Fetching deposit transaction nonce'
+    last: str = 'Building deposit transaction'
+    other: str = 'Other instance approval'
+    secret: str = 'private-note-do-not-send-in-progress'
+
+    def deposit(*args: Any) -> dict[str, str]:
+        counter: webui.Counters = webui.Counters(backend.instances[INSTANCE])
+        counter.on_progress(first)
+        assert release.wait(3)
+        counter.on_progress(last)
+        if failure:
+            raise RuntimeError('Deposit failed')
+        return {'from': ACCOUNT}
+
+    def approve(*args: Any) -> dict[str, str]:
+        webui.Counters(backend.instances['ethereum-dai-10']).on_progress(other)
+        return {'from': ACCOUNT}
+
+    operations['deposit_tx'].side_effect = deposit
+    backend.instances['ethereum-dai-10'].tornado.approve_tx.side_effect = approve
+
+    async def result(socket: ClientConnection, request_id: int) -> list[dict[str, Any]]:
+        messages: list[dict[str, Any]] = []
+        async with asyncio.timeout(2):
+            while True:
+                message: dict[str, Any] = json.loads(await socket.recv())
+                if 'id' not in message:
+                    continue
+                messages.append(message)
+                if message['id'] == request_id and message.get('type') != 'progress':
+                    return messages
+
+    async def scenario() -> None:
+        async with serve(lambda socket: webui.handle_client(socket, backend), '127.0.0.1', 0) as server:
+            url: str = f'ws://127.0.0.1:{server.sockets[0].getsockname()[1]}'
+            async with connect(url) as socket, connect(url) as unrelated:
+                await receive(socket, 'status')
+                await receive(unrelated, 'status')
+                try:
+                    await socket.send(json.dumps({'id': 7, 'method': 'deposit', 'params': {**PARAMS, 'note': secret}}))
+                    stages: list[dict[str, Any]] = []
+                    while True:
+                        phase: dict[str, Any] = await receive(socket, 'progress', 7)
+                        stages.append(phase)
+                        if phase['message'] == first:
+                            break
+                    assert not release.is_set()
+                    await unrelated.send(json.dumps({'id': 7, 'method': 'approve', 'params': {**PARAMS, 'instance': 'ethereum-dai-10'}}))
+                    independent: list[dict[str, Any]] = await result(unrelated, 7)
+                    assert any(message.get('message') == other for message in independent)
+                    assert all(message.get('message') not in (first, last) for message in independent)
+                    release.set()
+                    completed: list[dict[str, Any]] = await result(socket, 7)
+                    phases: list[dict[str, Any]] = stages + completed[:-1]
+                    assert any(message['message'] == last for message in phases)
+                    assert all(set(message) == {'id', 'type', 'message'} and message['id'] == 7 for message in phases)
+                    assert all(message['message'] != other for message in phases)
+                    assert secret not in json.dumps(phases)
+                    assert completed[-1] == ({'id': 7, 'error': 'Deposit failed'} if failure else {'id': 7, 'result': {'from': ACCOUNT}})
+                    await socket.send(json.dumps({'id': 8, 'method': 'status'}))
+                    assert len(await result(socket, 8)) == 1
+                finally:
+                    release.set()
+            async with connect(url) as reconnected:
+                status: dict[str, Any] = await receive(reconnected, 'status')
+                assert all(row['operation_progress'] is None for row in status['instances'])
+                webui.Counters(backend.instances[INSTANCE]).on_progress('Old operation after reconnect')
+                await reconnected.send(json.dumps({'id': 9, 'method': 'status'}))
+                assert len(await result(reconnected, 9)) == 1
+        assert not any(task.get_coro().__qualname__.endswith('publish_progress') for task in asyncio.all_tasks())
+
+    asyncio.run(scenario())
+
+
 def test_websocket_disconnect_cancels_sync_wait_and_releases_the_instance(backend: webui.Backend, operations: dict[str, Mock],
                                                                         waiting_poller: tuple[webui.EventPoller, threading.Event],
                                                                         monkeypatch: pytest.MonkeyPatch) -> None:
@@ -844,6 +1022,7 @@ def test_websocket_disconnect_cancels_sync_wait_and_releases_the_instance(backen
                 assert await asyncio.to_thread(released.wait, 2)
                 assert not backend.instances[INSTANCE].lock.locked()
                 item: webui.Instance = backend.instances[INSTANCE]
+                assert item.progress_callback is item.progress is item.activity is None
                 operations['prepare_withdraw'].assert_not_called()
         finally:
             backend.stopping = True
@@ -884,7 +1063,7 @@ def test_websocket_keeps_publishing_during_work_and_cleans_up_on_disconnect(back
                     assert await asyncio.to_thread(entered.wait, 1)
                     entries.append({'id': 9, 'level': 'I', 'text': 'working'})
                     status: dict[str, Any] = await receive(socket, 'status')
-                    assert status['ready'] and status['instances'][0]['state'] == 'ready'
+                    assert status['ready'] and status['instances'][0]['state'] == 'working'
                     assert await receive(socket, 'logs') == {'type': 'logs', 'reset': False, 'entries': entries}
                 await asyncio.wait_for(finished.wait(), 0.5)
                 reads_after_disconnect: int = recent_logs.call_count
