@@ -3,6 +3,7 @@ const number = (value) => value == null ? '—' : Number(value).toLocaleString('
 const pending = new Map();
 let socket, sequence = 0, snapshot = { instances: [] };
 let selected = '', poolList = '', account = '', walletChain = '', busy = false, draft = null;
+let lastLogId = 0, firstLogs = true;
 let provider;
 const providers = new WeakSet();
 const states = {
@@ -55,10 +56,12 @@ function connect() {
     const url = new URLSearchParams(location.search).get('ws') || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.hostname || '127.0.0.1'}:8765`;
     try { socket = new WebSocket(url); }
     catch (error) { message(error.message, true); return; }
-    socket.onopen = () => renderStatus();
+    firstLogs = true;
+    socket.onopen = () => { renderStatus(); updateLogStatus(); };
     socket.onmessage = ({ data }) => {
         let result;
         try { result = JSON.parse(data); } catch { return; }
+        if (result.type === 'logs') { appendLogs(result); return; }
         if (result.type === 'status') {
             snapshot = result;
             if (!snapshot.instances.some((item) => item.id === selected)) selected = snapshot.instances[0]?.id || '';
@@ -79,9 +82,31 @@ function connect() {
         }
         pending.clear();
         renderStatus();
+        updateLogStatus();
         setTimeout(connect, 2000);
     };
     socket.onerror = () => socket.close();
+}
+
+function updateLogStatus() {
+    $('logs-status').textContent = socket?.readyState === WebSocket.OPEN
+        ? `${$('logs').childElementCount} / 500 lines · connected`
+        : 'Disconnected · logs kept · reconnecting…';
+}
+
+function appendLogs({ entries, reset }) {
+    const output = $('logs');
+    if (reset || firstLogs) { output.replaceChildren(); lastLogId = 0; firstLogs = false; }
+    for (const entry of entries) {
+        if (entry.id <= lastLogId) continue;
+        lastLogId = entry.id;
+        const line = element('div', entry.text, 'log-line');
+        line.dataset.level = entry.level;
+        output.append(line);
+    }
+    while (output.childElementCount > 500) output.firstElementChild.remove();
+    if ($('auto-scroll').checked) output.scrollTop = output.scrollHeight;
+    updateLogStatus();
 }
 
 function hasProgress(item) {
@@ -281,6 +306,9 @@ function closeDraft() {
 }
 
 $('network').onchange = () => { selected = snapshot.instances.find((item) => String(item.chain_id) === $('network').value)?.id || ''; renderPools(); renderStatus(); };
+$('clear-logs').onclick = () => { $('logs').replaceChildren(); updateLogStatus(); };
+$('auto-scroll').onchange = () => { if ($('auto-scroll').checked) $('logs').scrollTop = $('logs').scrollHeight; };
+$('live-logs').ontoggle = () => { if ($('live-logs').open && $('auto-scroll').checked) $('logs').scrollTop = $('logs').scrollHeight; };
 $('token').onchange = () => { selected = snapshot.instances.find((item) => item.chain_id === pool()?.chain_id && item.symbol === $('token').value)?.id || ''; renderPools(); renderStatus(); };
 $('wallet').onclick = () => run(async () => {
     await wallet(pool());

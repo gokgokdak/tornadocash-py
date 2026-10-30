@@ -80,6 +80,15 @@
       </section>
     </div>
 
+    <details id="live-logs" class="live-logs" open>
+      <summary><span>Live logs</span><span id="logs-status" class="muted">Connecting…</span></summary>
+      <div class="log-controls">
+        <label><input id="auto-scroll" type="checkbox" checked> Auto-scroll</label>
+        <button id="clear-logs" type="button">Clear</button>
+      </div>
+      <div id="logs" class="logs" role="log" aria-label="Backend logs" aria-live="off" tabindex="0"></div>
+    </details>
+
     <section class="instances" aria-labelledby="instances-heading">
       <div class="section-title"><h2 id="instances-heading">Backend instances</h2><span id="ready-count" class="muted">—</span></div>
       <div class="table-wrap">

@@ -380,8 +380,16 @@ async def handle_client(socket: ServerConnection, backend: Backend) -> None:
 
 
     async def publish() -> None:
+        last_log_id: int  = 0
+        reset_logs : bool = True
         while True:
             await socket.send(json.dumps(backend.status()))
+            entries: list[dict] = log.get_recent(last_log_id)
+            if entries or reset_logs:
+                await socket.send(json.dumps({'type': 'logs', 'reset': reset_logs, 'entries': entries}))
+                if entries:
+                    last_log_id = entries[-1]['id']
+                reset_logs = False
             await asyncio.sleep(1)
 
     async def respond() -> None:
