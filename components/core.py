@@ -313,6 +313,41 @@ class Tornado(EventPoller.Handler):
         log.info(self.tag, f'Deposit {self.unit.value} {self.symbol.value.upper()} succeed, tx hash: {tx_hash.hex()}', log.Color.CYAN, log.Style.BOLD)
         return tx_hash
 
+    def prepare_withdraw(self,
+                         note     : Note,
+                         recipient: ChecksumAddress,
+                         relayer  : ChecksumAddress = ChecksumAddress('0x0000000000000000000000000000000000000000'),
+                         fee      : Wei             = Wei(0),
+                         refund   : Wei             = Wei(0)) -> tuple[MerkleProof, dict] | None:
+        # Get merkle proof
+        if self.sync_only or self.tree is None:
+            log.error(self.tag, 'prepare_withdraw(), full initialization is required before withdrawal')
+            return None
+        with self.mutex:
+            index       : int | None         = self.tree.get_index(note.commitment)
+            merkle_proof: MerkleProof | None = self.tree.get_merkle_proof(index) if index is not None else None
+        if merkle_proof is None:
+            log.error(self.tag, 'prepare_withdraw(), deposit is missing from the local tree')
+            return None
+        # Get ZK proof
+        zk_proof: dict | None = self.zksnark.prove(CircuitInput(
+            merkle_proof=merkle_proof,
+            note=note,
+            recipient=recipient,
+            relayer=relayer,
+            fee=fee,
+            refund=refund,
+        ))
+        if zk_proof is None:
+            log.error(self.tag, 'prepare_withdraw(), failed to generate proof')
+            return None
+        # ZK Verify
+        if not self.zksnark.verify(zk_proof):
+            log.error(self.tag, 'prepare_withdraw(), failed to verify proof')
+            return None
+        log.info(self.tag, f'Proof generated for commitment: {note.commitment.to_0x_hex()}')
+        return merkle_proof, zk_proof
+
     # Create unsigned withdraw transaction
     # @param    note            The note to withdraw
     # @param    withdrawer      The address to make the withdrawal, must use the corresponding private key to sign the transaction
@@ -362,7 +397,7 @@ class Tornado(EventPoller.Handler):
     # @param    key_or_relayer  The private key to pay the gas fee, or the URL of the relayer
     # @param    nonce           The nonce of the withdrawer address, if None and not using relayer, will be queried from the blockchain
     # @param    refund          Amount to send to the recipient, make sure the `key_or_relayer` is a key and has enough balance
-    # @return   HexBytes of transaction hash on success, None if failed or sync-only mode
+    # @return   HexBytes of transaction hash on success, None if failed
     def withdraw(self,
                  note: Note,
                  recipient: ChecksumAddress,
@@ -453,35 +488,13 @@ class Tornado(EventPoller.Handler):
                 return None
             log.info(self.tag, f'withdraw(to={recipient}), relayer fee {relayer_fee} Wei ({relayer_fee * 100 / total_wei:.2f}%), relayer address {relayer_address}, relayer URL {relayer_url}')
 
-        # Get merkle proof
-        with self.mutex:
-            leaf_index: int | None = self.tree.get_index(note.commitment)
-            if leaf_index is None:
-                log.error(self.tag, f'withdraw(to={recipient}), note commitment not found in the tree: {note.commitment.to_0x_hex()}')
-                return None
-            merkle_proof: MerkleProof | None = self.tree.get_merkle_proof(leaf_index)
-            if merkle_proof is None:
-                log.error(self.tag, f'withdraw(to={recipient}), failed to get merkle proof for note commitment: {note.commitment.to_0x_hex()}')
-                return None
-        # Circuit input
-        circuit_input: CircuitInput = CircuitInput(
-            merkle_proof=merkle_proof,
-            note=note,
-            recipient=recipient,
-            relayer=relayer_address,
-            fee=relayer_fee,
-            refund=refund
-        )
-        # Prove
-        zk_proof: dict | None = self.zksnark.prove(circuit_input)
-        if zk_proof is None:
-            log.error(self.tag, f'withdraw(to={recipient}), failed to prove for commitment: {note.commitment.to_0x_hex()}')
+        # Merkle proof and ZK proof
+        prepared: tuple[MerkleProof, dict] | None = self.prepare_withdraw(note, recipient, relayer_address, relayer_fee, refund)
+        if prepared is None:
             return None
-        # Verify test
-        if not self.zksnark.verify(zk_proof):
-            log.error(self.tag, f'withdraw(to={recipient}), failed to test verify proof for commitment: {note.commitment.to_0x_hex()}')
-            return None
-        log.info(self.tag, f'Proof generated for commitment: {note.commitment.to_0x_hex()}')
+        merkle_proof: MerkleProof
+        zk_proof    : dict
+        merkle_proof, zk_proof = prepared
 
         # Make withdrawal via relayer
         if use_relayer:
