@@ -111,6 +111,42 @@ def test_explicit_full_init_builds_tree_atomically_and_future_sync_appends(torna
     tornado.connection.sign_transaction.assert_not_called()
 
 
+@pytest.mark.parametrize('with_deposit', [False, True])
+def test_sync_records_update_time_before_notifying(tornado: core.Tornado, monkeypatch: pytest.MonkeyPatch, with_deposit: bool) -> None:
+    updated: Second = Second(1234)
+    clock: Mock = Mock(return_value=updated)
+    handler: Mock = Mock(side_effect=lambda *args: observed.append(tornado.last_update_sec))
+    observed: list[Second | None] = []
+    tornado.handlers = [SimpleNamespace(on_sync=handler)]
+    monkeypatch.setattr(core.util, 'unix_timestamp', clock)
+    deposits: list = [SimpleNamespace(commitment=HexBytes('0x55'))] if with_deposit else []
+    tornado.on_sync(100, 101, deposits, [])
+    assert tornado.last_update_sec == updated
+    assert observed == [updated]
+    clock.assert_called_once_with()
+    handler.assert_called_once_with(100, 101, deposits, [])
+
+
+@pytest.mark.parametrize('failure', ['database', 'tree', 'rejected_append'])
+def test_failed_sync_keeps_previous_update_time(tornado: core.Tornado, monkeypatch: pytest.MonkeyPatch, failure: str) -> None:
+    tornado.last_update_sec = Second(1234)
+    clock: Mock = Mock(return_value=Second(5678))
+    handler: Mock = Mock()
+    tornado.handlers = [SimpleNamespace(on_sync=handler)]
+    monkeypatch.setattr(core.util, 'unix_timestamp', clock)
+    if failure == 'database':
+        tornado.db.add_synchronized.return_value = False
+    elif failure == 'tree':
+        tornado.tree.add.side_effect = RuntimeError('tree update failed')
+    else:
+        tornado.tree.add.return_value = False
+    with pytest.raises(RuntimeError):
+        tornado.on_sync(100, 101, [SimpleNamespace(commitment=HexBytes('0x55'))], [])
+    assert tornado.last_update_sec == Second(1234)
+    clock.assert_not_called()
+    handler.assert_not_called()
+
+
 @pytest.mark.parametrize('failure', [None, ValueError('invalid leaves')])
 def test_failed_full_init_keeps_sync_only_mode(tornado: core.Tornado, monkeypatch: pytest.MonkeyPatch, failure: ValueError | None) -> None:
     tornado.sync_only, tornado.tree = True, None
