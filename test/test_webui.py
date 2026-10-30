@@ -168,7 +168,7 @@ def operations(backend: webui.Backend, monkeypatch: pytest.MonkeyPatch) -> dict[
 
 async def receive(socket: ClientConnection, message_type: str | None = None,
                   request_id: int | str | None = None) -> dict[str, Any]:
-    async with asyncio.timeout(2):
+    async def read() -> dict[str, Any]:
         while True:
             message: dict[str, Any] = json.loads(await socket.recv())
             if message_type is not None:
@@ -176,6 +176,7 @@ async def receive(socket: ClientConnection, message_type: str | None = None,
                     return message
             elif 'id' in message and message['id'] == request_id and message.get('type') != 'progress':
                 return message
+    return await asyncio.wait_for(read(), 2)
 
 
 @pytest.fixture
@@ -946,7 +947,7 @@ def test_websocket_progress_is_live_isolated_and_drained_before_result(backend: 
 
     async def result(socket: ClientConnection, request_id: int) -> list[dict[str, Any]]:
         messages: list[dict[str, Any]] = []
-        async with asyncio.timeout(2):
+        async def read() -> list[dict[str, Any]]:
             while True:
                 message: dict[str, Any] = json.loads(await socket.recv())
                 if 'id' not in message:
@@ -954,6 +955,7 @@ def test_websocket_progress_is_live_isolated_and_drained_before_result(backend: 
                 messages.append(message)
                 if message['id'] == request_id and message.get('type') != 'progress':
                     return messages
+        return await asyncio.wait_for(read(), 2)
 
     async def scenario() -> None:
         async with serve(lambda socket: webui.handle_client(socket, backend), '127.0.0.1', 0) as server:
