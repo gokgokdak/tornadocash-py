@@ -33,27 +33,27 @@ class Tornado(EventPoller.Handler):
             pass
 
     def __init__(self, chain: ChainID, symbol: Symbol, unit: TornadoUnit, connection: rpc.Interface | None = None):
-        self.tag                : str                           = f'{__class__.__name__}'
-        self.chain              : ChainID                       = chain
-        self.symbol             : Symbol                        = symbol
-        self.unit               : TornadoUnit                   = unit
-        self.connection         : rpc.Interface | None          = connection
-        self.external           : bool                          = connection is not None  # If True, the RPC connection is managed outside
-        self.initialized        : bool                          = False
-        self.sync_only          : bool                          = False  # If True, only sync events without rebuilding the merkle tree, 'withdraw()' will not be available
-        self.db                 : database.Interface            = database.create(database.Backend.SQLITE)
-        self.meta               : Metadata                      = util.load_metadata()[chain]
-        self.proxy_address      : ChecksumAddress               = self.meta.proxy_address
-        self.deployment_address : ChecksumAddress               = self.meta.deployment[self.symbol][self.unit][0]
-        self.proxy_contract     : Contract | rpc.Error | None   = None
-        self.deployment_contract: Contract | rpc.Error | None   = None
-        self.token_contract     : Contract | rpc.Error | None   = None
-        self.poller             : EventPoller                   = EventPoller(chain)
-        self.catchup            : bool                          = False
-        self.tree               : merkle_tree.Interface | None  = None
-        self.zksnark            : zk.circuit.Interface          = zk.circuit.create(zk.circuit.ImplType(config.ZK_BACKEND))
-        self.mutex              : threading.Lock                = threading.Lock()
-        self.handlers           : list[Tornado.Handler]         = []
+        self.tag                : str                          = f'{__class__.__name__}'
+        self.chain              : ChainID                      = chain
+        self.symbol             : Symbol                       = symbol
+        self.unit               : TornadoUnit                  = unit
+        self.connection         : rpc.Interface | None         = connection
+        self.external           : bool                         = connection is not None  # If True, the RPC connection is managed outside
+        self.initialized        : bool                         = False
+        self.sync_only          : bool                         = False  # If True, only sync events without rebuilding the merkle tree, 'withdraw()' will not be available
+        self.db                 : database.Interface           = database.create(database.Backend.SQLITE)
+        self.meta               : Metadata                     = util.load_metadata()[chain]
+        self.proxy_address      : ChecksumAddress              = self.meta.proxy_address
+        self.deployment_address : ChecksumAddress              = self.meta.deployment[self.symbol][self.unit][0]
+        self.proxy_contract     : Contract | rpc.Error | None  = None
+        self.deployment_contract: Contract | rpc.Error | None  = None
+        self.token_contract     : Contract | rpc.Error | None  = None
+        self.poller             : EventPoller                  = EventPoller(chain)
+        self.catchup            : bool                         = False
+        self.tree               : merkle_tree.Interface | None = None
+        self.zksnark            : zk.circuit.Interface         = zk.circuit.create(zk.circuit.ImplType(config.ZK_BACKEND))
+        self.mutex              : threading.Lock               = threading.Lock()
+        self.handlers           : list[Tornado.Handler]        = []
         with open(config.TORNADO_PROXY_ABI_PATH, 'r') as f:
             proxy_abi: str = f.read()
         with open(config.TORNADO_ABI_PATH, 'r') as f:
@@ -524,7 +524,7 @@ class Tornado(EventPoller.Handler):
                 nonlocal count_attempts
                 nonlocal count_attempts_max
                 try:
-                    resp = requests.get(relayer_url.rstrip('/') + f'/v1/jobs/{job_id}')
+                    resp: Response = requests.get(relayer_url.rstrip('/') + f'/v1/jobs/{job_id}')
                 except BaseException as e:
                     log.error(self.tag, f'withdraw(to={recipient}), failed to get job status from relayer: {e}')
                     return None
