@@ -218,6 +218,7 @@ class Backend:
             'stopping'                : self.stopping,
             'instances'               : rows,
             'relayer_fee_rate'        : config.RELAYER_FEE_RATE,
+            'walletconnect_project_id': config.WEBUI_WALLETCONNECT_PROJECT_ID,
         }
 
     def dispatch(self, method: str, params: dict[str, Any], cancelled: threading.Event | None = None,

@@ -102,6 +102,20 @@
 
   <footer class="container"><span>Tornado Cash · Local client</span><a href="https://github.com/tornadocash/tornado-classic-ui" target="_blank" rel="noopener noreferrer">Classic UI ↗</a></footer>
 
+  <dialog id="wallet-dialog" aria-labelledby="wallet-title">
+    <h2 id="wallet-title">Connect wallet</h2>
+    <div class="note-tools"><button id="connect-browser" class="outline" type="button">Browser wallet</button><button id="connect-walletconnect" class="outline" type="button">WalletConnect</button></div>
+    <div id="wallet-qr" hidden>
+      <p>Scan with your wallet, or copy the connection link into its WalletConnect screen.</p>
+      <img id="wallet-qr-image" alt="WalletConnect pairing QR code" width="256" height="256">
+      <label class="sr-only" for="wallet-uri">WalletConnect connection link</label>
+      <input id="wallet-uri" readonly autocomplete="off" spellcheck="false">
+      <button id="copy-wallet-uri" class="outline full" type="button">Copy connection link</button>
+    </div>
+    <p id="wallet-message" role="status" aria-live="polite"></p>
+    <div class="note-tools"><button id="disconnect-wallet" type="button" hidden>Disconnect</button><button id="close-wallet" type="button">Close</button></div>
+  </dialog>
+
   <dialog id="backup-dialog" aria-labelledby="backup-title">
     <h2 id="backup-title">Back up your note</h2>
     <p>Your note is the only way to withdraw your deposit. Save it before continuing.</p>

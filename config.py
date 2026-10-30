@@ -59,6 +59,9 @@ WEBUI_WS_PORT: int = 8765
 # Blockchain networks to start in the Web UI, e.g., {ChainID.SEPOLIA}
 WEBUI_CHAINS: set[ChainID] = set(ChainID)
 
+# Project ID for WalletConnect, leave empty to use browser wallets only
+WEBUI_WALLETCONNECT_PROJECT_ID: str = ''
+
 # Serve the static Web UI, set to False to run the WebSocket server only
 WEBUI_SERVE_UI: bool = True
 

@@ -4,6 +4,7 @@
 __pycache__/
 backup/
 logs/
+node_modules/
 db/*.sqlite*
 db/LICENSE
 db/README.md
