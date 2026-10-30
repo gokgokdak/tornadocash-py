@@ -6,7 +6,7 @@ from web3 import Web3
 from web3.types import LogReceipt, Wei
 
 from . import log, rpc, util
-from .mytype import ChainID, chain_to_string
+from .mytype import ChainID, Second, chain_to_string
 from .util import upper_first_char
 import config
 
@@ -150,7 +150,7 @@ class EventPoller(object):
             """Called when the latest block number is updated."""
             pass
 
-    def __init__(self, chain: ChainID, connection: rpc.Interface | None = None) -> None:
+    def __init__(self, chain: ChainID, connection: rpc.Interface | None = None, poll_interval: float | None = None) -> None:
         self.tag           : str                       = f'{__class__.__name__}@{upper_first_char(chain_to_string(chain))}'
         self.off           : bool                      = True
         self.chain         : ChainID                   = chain
@@ -163,6 +163,7 @@ class EventPoller(object):
         self.cond          : threading.Condition       = threading.Condition()
         self.worker        : threading.Thread | None   = None
         self.handlers      : list[EventPoller.Handler] = []
+        self.poll_interval : float                     = config.BLOCKCHAIN_LOG_EVENT_POLL_INTERVAL_SEC if poll_interval is None else poll_interval
         if self.connection is None:
             self.connection = rpc.Connection(self.chain, config.RPC_URLS[self.chain])
 
@@ -323,4 +324,4 @@ class EventPoller(object):
                         h.on_first_catchup()
                 # Sleep interval if no new block
                 if not self.off:
-                    util.wait(config.BLOCKCHAIN_LOG_EVENT_POLL_INTERVAL_SEC, self.cond)
+                    util.wait(Second(self.poll_interval), self.cond)
