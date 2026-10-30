@@ -45,6 +45,17 @@ ZK_WORKERS: int = 8
 # Increase this value manually if relayer rejects your request
 RELAYER_FEE_RATE: str = '1.8'
 
+# Bind address for the Web UI and WebSocket servers
+# WARNING: Keep this set to 127.0.0.1; do not listen on LAN or public interfaces
+# The backend handles private notes and exposes logs without authentication or TLS
+WEBUI_HOST: str = '127.0.0.1'
+
+# Port for the WebSocket server
+WEBUI_WS_PORT: int = 8765
+
+# Blockchain networks to start in the Web UI, e.g., {ChainID.SEPOLIA}
+WEBUI_CHAINS: set[ChainID] = set(ChainID)
+
 
 # ================================================== Constants =========================================================
 
