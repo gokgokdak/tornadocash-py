@@ -50,12 +50,17 @@ RELAYER_FEE_RATE: str = '1.8'
 # The backend handles private notes and exposes logs without authentication or TLS
 WEBUI_HOST: str = '127.0.0.1'
 
+# Port for the static Web UI server
+WEBUI_PORT: int = 8080
+
 # Port for the WebSocket server
 WEBUI_WS_PORT: int = 8765
 
 # Blockchain networks to start in the Web UI, e.g., {ChainID.SEPOLIA}
 WEBUI_CHAINS: set[ChainID] = set(ChainID)
 
+# Serve the static Web UI, set to False to run the WebSocket server only
+WEBUI_SERVE_UI: bool = True
 
 # ================================================== Constants =========================================================
 

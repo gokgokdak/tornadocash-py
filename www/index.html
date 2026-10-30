@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Tornado Cash</title>
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" type="module"></script>
+</head>
+<body>
+  <header class="container header">
+    <a href="./" aria-label="Tornado Cash home"><img class="logo" src="assets/logo.svg" alt="Tornado"></a>
+    <a class="docs" href="https://github.com/gokgokdak/tornadocash-py/blob/main/README.md" target="_blank" rel="noopener noreferrer">▤ Docs ↗</a>
+    <div class="wallet-controls">
+      <label class="sr-only" for="network">Network</label>
+      <select id="network" aria-label="Network" disabled><option>Network</option></select>
+      <button id="wallet" class="outline">Connect wallet</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="columns">
+      <section class="transaction" aria-label="Transactions">
+        <div class="tabs" role="tablist" aria-label="Transaction type">
+          <button id="deposit-tab" role="tab" aria-controls="deposit-panel" aria-selected="true">Deposit</button>
+          <button id="withdraw-tab" role="tab" aria-controls="withdraw-panel" aria-selected="false">Withdraw</button>
+        </div>
+        <div class="transaction-body">
+          <form id="deposit-panel" role="tabpanel" aria-labelledby="deposit-tab">
+            <fieldset id="deposit-fields" disabled>
+              <label for="token">Token</label>
+              <select id="token"><option>—</option></select>
+              <label id="amount-label">Amount <span class="info" title="Each pool accepts a fixed deposit amount.">i</span></label>
+              <div id="amounts" class="amounts" role="group" aria-labelledby="amount-label"></div>
+              <button id="start-deposit" class="primary full" type="submit">Deposit</button>
+            </fieldset>
+          </form>
+          <form id="withdraw-panel" role="tabpanel" aria-labelledby="withdraw-tab" hidden>
+            <fieldset id="withdraw-fields" disabled>
+              <label for="withdraw-note">Note</label>
+              <textarea id="withdraw-note" placeholder="Please enter your note" required spellcheck="false" autocomplete="off"></textarea>
+              <label for="recipient">Recipient address</label>
+              <input id="recipient" placeholder="0x…" required autocomplete="off" spellcheck="false">
+              <div class="withdraw-mode">
+                <label><input type="radio" name="mode" value="wallet" checked> Wallet</label>
+                <label><input type="radio" name="mode" value="relayer"> Relayer</label>
+              </div>
+              <div id="relayer-field" hidden>
+                <label for="relayer">Relayer URL</label>
+                <input id="relayer" type="url" placeholder="https://…" spellcheck="false">
+                <p id="relayer-fee" class="muted"></p>
+                <label class="backup-check"><input id="accept-fee" type="checkbox"> I accept the service fee and network gas.</label>
+              </div>
+              <button id="check-note" class="outline full" type="button">Check note</button>
+              <p id="note-status" class="muted" aria-live="polite"></p>
+              <button id="confirm-withdraw" class="primary full" type="submit">Withdraw</button>
+            </fieldset>
+          </form>
+          <p id="message" role="status" aria-live="polite"></p>
+        </div>
+      </section>
+
+    </div>
+
+  </main>
+
+  <footer class="container"><span>Tornado Cash · Local client</span><a href="https://github.com/tornadocash/tornado-classic-ui" target="_blank" rel="noopener noreferrer">Classic UI ↗</a></footer>
+
+  <dialog id="backup-dialog" aria-labelledby="backup-title">
+    <h2 id="backup-title">Back up your note</h2>
+    <p>Your note is the only way to withdraw your deposit. Save it before continuing.</p>
+    <textarea id="deposit-note" readonly spellcheck="false" aria-label="Deposit note"></textarea>
+    <div class="note-tools"><button id="download-note" class="outline" type="button">Download note</button><button id="copy-note" class="outline" type="button">Copy note</button></div>
+    <p id="backup-message" role="status"></p>
+    <button id="approve-token" class="outline full" type="button" hidden>Approve token</button>
+    <div class="note-tools"><button id="cancel-deposit" type="button">Cancel</button><button id="confirm-deposit" class="primary" type="button">Deposit</button></div>
+  </dialog>
+</body>
+</html>

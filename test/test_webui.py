@@ -27,6 +27,53 @@ PARAMS = {'instance': INSTANCE, 'account': ACCOUNT, 'note': 'note',
           'recipient': RECIPIENT, 'relayer': 'https://relayer.example', 'hash': HASH}
 
 
+def test_http_logs_access_as_info_and_failures_as_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                       capsys: pytest.CaptureFixture[str]) -> None:
+    (tmp_path / 'index.html').write_text('webui')
+    info, error = Mock(), Mock()
+    monkeypatch.setattr(webui.log, 'info', info)
+    monkeypatch.setattr(webui.log, 'error', error)
+    with webui.ThreadingHTTPServer(('127.0.0.1', 0), partial(webui.HTTPHandler, directory=str(tmp_path))) as server:
+        worker: threading.Thread = threading.Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+        client: HTTPConnection = HTTPConnection(*server.server_address, timeout=2)
+        try:
+            client.request('GET', '/')
+            response = client.getresponse()
+            modified: str | None = response.getheader('Last-Modified')
+            assert response.status == 200 and response.read() == b'webui'
+            assert modified is not None
+            client.request('GET', '/', headers={'If-Modified-Since': modified})
+            response = client.getresponse()
+            assert response.status == 304 and response.read() == b''
+            assert info.call_count == 2
+            error.assert_not_called()
+            for code, call in zip(('200', '304'), info.call_args_list):
+                assert call.args[0] == 'HTTP' and f' {code} ' in call.args[1]
+                assert '127.0.0.1' in call.args[1]
+            client.request('GET', '/missing')
+            response = client.getresponse()
+            assert response.status == 404
+            response.read()
+            assert error.call_args.args[0] == 'HTTP'
+            assert '127.0.0.1' in error.call_args.args[1] and '404' in error.call_args.args[1]
+        finally:
+            client.close()
+            server.shutdown()
+            worker.join(2)
+    assert capsys.readouterr().err == ''
+
+
+@pytest.mark.parametrize(('method', 'level'), [('log_message', 'info'), ('log_error', 'error')])
+def test_http_log_escapes_control_characters(monkeypatch: pytest.MonkeyPatch, method: str, level: str) -> None:
+    logged: Mock = Mock()
+    monkeypatch.setattr(webui.log, level, logged)
+    handler: webui.HTTPHandler = object.__new__(webui.HTTPHandler)
+    handler.client_address = ('127.0.0.1', 12345)
+    getattr(handler, method)('path %s', '/\x1b[31m\n')
+    assert logged.call_args.args == ('HTTP', r'127.0.0.1 path /\x1b[31m\x0a')
+
+
 class FakePoller:
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
