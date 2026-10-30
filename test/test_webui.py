@@ -125,6 +125,7 @@ def backend(monkeypatch: pytest.MonkeyPatch) -> webui.Backend:
         TornadoUnit.UNIT_1: (ACCOUNT, 10), TornadoUnit.UNIT_10: (RECIPIENT, 10),
     }}, decimals={Symbol.DAI: 18})
     monkeypatch.setattr(webui.util, 'load_metadata', lambda: {ChainID.ETHEREUM: meta})
+    monkeypatch.setattr(webui.log, 'get_recent', lambda after_id=0: [])
     backend = webui.Backend({ChainID.ETHEREUM})
     for item in backend.instances.values():
         item.totals = (100, 30)
@@ -175,6 +176,18 @@ async def receive(socket: ClientConnection, message_type: str | None = None,
                     return message
             elif 'id' in message and message['id'] == request_id and message.get('type') != 'progress':
                 return message
+
+
+@pytest.fixture
+def log_history(backend: webui.Backend, monkeypatch: pytest.MonkeyPatch) -> tuple[list[dict], Mock]:
+    entries: list[dict] = []
+
+    def recent(after_id: int = 0) -> list[dict]:
+        return [entry.copy() for entry in entries if entry['id'] > after_id]
+
+    recent_logs: Mock = Mock(side_effect=recent)
+    monkeypatch.setattr(webui.log, 'get_recent', recent_logs)
+    return entries, recent_logs
 
 
 @pytest.mark.parametrize(('change', 'ready'), [
@@ -837,5 +850,73 @@ def test_websocket_disconnect_cancels_sync_wait_and_releases_the_instance(backen
             with poller.cond:
                 poller.cond.notify_all()
         assert not any(task.get_coro().__qualname__.endswith('publish_progress') for task in asyncio.all_tasks())
+
+    asyncio.run(scenario())
+
+
+def test_websocket_keeps_publishing_during_work_and_cleans_up_on_disconnect(backend: webui.Backend, operations: dict[str, Mock],
+                                                                            log_history: tuple[list[dict], Mock]) -> None:
+    entered, release = threading.Event(), threading.Event()
+    entries, recent_logs = log_history
+
+    def slow(*args: Any) -> dict[str, str]:
+        entered.set()
+        assert release.wait(6)
+        return {'from': ACCOUNT}
+
+    operations['approve_tx'].side_effect = slow
+
+    async def scenario() -> None:
+        finished = asyncio.Event()
+
+        async def handle(socket: ServerConnection) -> None:
+            try:
+                await webui.handle_client(socket, backend)
+            finally:
+                finished.set()
+
+        try:
+            async with serve(handle, '127.0.0.1', 0) as server:
+                async with connect(f'ws://127.0.0.1:{server.sockets[0].getsockname()[1]}') as socket:
+                    assert (await receive(socket, 'status'))['ready']
+                    assert await receive(socket, 'logs') == {'type': 'logs', 'reset': True, 'entries': []}
+                    await socket.send(json.dumps({'id': 1, 'method': 'approve', 'params': PARAMS}))
+                    assert await asyncio.to_thread(entered.wait, 1)
+                    entries.append({'id': 9, 'level': 'I', 'text': 'working'})
+                    status: dict[str, Any] = await receive(socket, 'status')
+                    assert status['ready'] and status['instances'][0]['state'] == 'ready'
+                    assert await receive(socket, 'logs') == {'type': 'logs', 'reset': False, 'entries': entries}
+                await asyncio.wait_for(finished.wait(), 0.5)
+                reads_after_disconnect: int = recent_logs.call_count
+                await asyncio.sleep(0.03)
+                assert recent_logs.call_count == reads_after_disconnect
+        finally:
+            release.set()
+            await backend.close()
+
+    asyncio.run(scenario())
+
+
+def test_websocket_history_and_id_based_increments_work_while_unsynchronized(backend: webui.Backend,
+                                                                             log_history: tuple[list[dict], Mock]) -> None:
+    entries, _ = log_history
+    entries.extend([{'id': 5, 'level': 'I', 'text': 'same'}, {'id': 11, 'level': 'I', 'text': 'same'}])
+    backend.instances[INSTANCE].tornado.poller.state.update(error='RPC failed', synchronized=False)
+
+    async def scenario() -> None:
+        async with serve(lambda socket: webui.handle_client(socket, backend), '127.0.0.1', 0) as server:
+            url: str = f'ws://127.0.0.1:{server.sockets[0].getsockname()[1]}'
+            async with connect(url) as socket:
+                assert not (await receive(socket, 'status'))['ready']
+                assert await receive(socket, 'logs') == {'type': 'logs', 'reset': True, 'entries': entries}
+                entries.append({'id': 20, 'level': 'I', 'text': 'same'})
+                assert await receive(socket, 'logs') == {'type': 'logs', 'reset': False, 'entries': entries[-1:]}
+                entries.append({'id': 29, 'level': 'I', 'text': 'same'})
+                assert await receive(socket, 'logs') == {'type': 'logs', 'reset': False, 'entries': entries[-1:]}
+                await socket.send(json.dumps({'id': 3, 'method': 'approve', 'params': PARAMS}))
+                assert (await receive(socket, request_id=3))['result'] == {'from': ACCOUNT}
+            async with connect(url) as socket:
+                assert not (await receive(socket, 'status'))['ready']
+                assert await receive(socket, 'logs') == {'type': 'logs', 'reset': True, 'entries': entries}
 
     asyncio.run(scenario())

@@ -90,6 +90,21 @@ progress::-webkit-progress-value { background: var(--green); }
 progress::-moz-progress-bar { background: var(--green); }
 .instance-error { color: #ff728d; display: block; white-space: normal; margin-top: 6px; max-width: 240px; overflow-wrap: anywhere; }
 .chain { display: block; margin-top: 3px; }
+.live-logs { margin-top: 32px; border: 1px solid var(--border); border-radius: 4px; min-width: 0; }
+.live-logs summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; cursor: pointer; color: var(--green); }
+.live-logs summary::before { content: '›'; }
+.live-logs[open] summary::before { content: '⌄'; }
+.live-logs summary > span:first-child { margin-right: auto; }
+.live-logs summary:focus-visible, .logs:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+#logs-status { font-size: 11px; text-align: right; }
+.log-controls { display: flex; align-items: center; justify-content: space-between; padding: 0 16px 12px; gap: 12px; }
+.log-controls label { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; }
+.log-controls button { min-height: 30px; padding: 4px 14px; font-size: 12px; font-weight: 400; }
+.logs { height: 240px; overflow: auto; padding: 12px 16px; border-top: 1px solid var(--border); background: #070b08; font-size: 11px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.logs:empty::before { content: 'Waiting for backend logs…'; color: var(--muted); }
+.log-line[data-level=W] { color: #ffc078; }
+.log-line[data-level=E] { color: #ff728d; }
+.log-line[data-level=D] { color: var(--muted); }
 .withdraw-mode { display: flex; gap: 24px; margin: 20px 0 12px; }
 .withdraw-mode label { display: flex; align-items: center; gap: 5px; }
 #withdraw-panel input:not([type=radio]), #withdraw-panel textarea { margin-bottom: 18px; }

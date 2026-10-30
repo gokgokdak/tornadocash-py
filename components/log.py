@@ -3,6 +3,7 @@ import multiprocessing as MP
 import os
 import sys
 import threading as TR
+from collections import deque
 from enum import Enum
 from multiprocessing.synchronize import Lock as MPLock
 from typing import Any, TextIO
@@ -99,17 +100,19 @@ LEVEL_ORDER: list[Level] = [Level.DEBUG, Level.INFO, Level.WARN, Level.ERROR]
 class Logger(object):
     def __init__(self, directory: str, name: str, rotate_size: MBytes = 0, write_interval: Second = Second(0)):
         os.makedirs(directory, exist_ok=True)
-        self.directory  : str       = directory
-        self.name       : str       = name
-        self.first_file : bool      = True
-        self.file       : TextIO    = self.open_file()
-        self.cache      : list[str] = []
-        self.interval   : Second    = write_interval
-        self.timestamp  : Second    = Second(0)
-        self.min_level  : Level     = Level.INFO
-        self.stdout     : bool      = False
-        self.mutex      : MPLock    = MP.Lock()
-        self.rotate_size: MBytes    = rotate_size
+        self.directory  : str         = directory
+        self.name       : str         = name
+        self.first_file : bool        = True
+        self.file       : TextIO      = self.open_file()
+        self.cache      : list[str]   = []
+        self.interval   : Second      = write_interval
+        self.timestamp  : Second      = Second(0)
+        self.min_level  : Level       = Level.INFO
+        self.stdout     : bool        = False
+        self.mutex      : MPLock      = MP.Lock()
+        self.rotate_size: MBytes      = rotate_size
+        self.history    : deque[dict] = deque(maxlen=500)
+        self.last_log_id: int         = 0
 
     def __del__(self):
         self.file.close()
@@ -155,6 +158,14 @@ class Logger(object):
                     text_write   += location
                 processed_console.append(f'{text_console}\n')
                 processed_write.append(f'{text_write}\n')
+            # Keep recent messages for live log readers
+            for text in processed_write:
+                self.last_log_id += 1
+                self.history.append({
+                    'id'   : self.last_log_id,
+                    'level': level.value,
+                    'text' : text[:4096],
+                })
             # Console print
             if self.stdout:
                 STDOUT.writelines(processed_console)
@@ -320,6 +331,14 @@ def set_level(level: Level):
 
 def get_level() -> Level:
     return Instance.get_level()
+
+
+def get_recent(after_id: int = 0) -> list[dict]:
+    logger: Logger | None = Instance.obj
+    if logger is None:
+        return []
+    with logger.mutex:
+        return [record.copy() for record in logger.history if record['id'] > after_id]
 
 
 @util.caller_location
