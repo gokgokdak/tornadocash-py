@@ -420,12 +420,12 @@ $('approve-token').onclick = () => run(async () => {
 });
 $('submit-deposit').onclick = () => run(async () => {
     if (!draft || !$('backup-confirm-dialog').open) throw new Error('Confirm that your note is saved before depositing.');
+    $('backup-confirm-dialog').close();
     checkBackend(draft.instance.id);
     const address = await wallet(draft.instance);
     message('Building deposit transaction…');
     const tx = await rpc('deposit', { instance: draft.instance.id, account: address, note: draft.note });
     await sendTransaction(tx, draft.instance);
-    $('backup-confirm-dialog').close();
     $('backup-dialog').close();
 });
 for (const radio of document.querySelectorAll('input[name=mode]')) radio.onchange = () => {
