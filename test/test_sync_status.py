@@ -1,6 +1,10 @@
 import json
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Callable, Iterator
+from unittest.mock import Mock
 
 import pytest
 from hexbytes import HexBytes
@@ -35,6 +39,370 @@ def test_activity_status_serializes_as_string(poller: blockchain.EventPoller, ac
     poller.activity = activity
     assert json.loads(json.dumps(poller.status()))['activity'] == value
     assert poller.activity is activity
+
+
+@pytest.fixture
+def waiter(poller: blockchain.EventPoller, monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[ThreadPoolExecutor, threading.Event]]:
+    entered: threading.Event = threading.Event()
+    original_wait = poller.cond.wait
+
+    def wait(timeout: float | None = None) -> bool:
+        if threading.current_thread().name.startswith('wait-sync-test'):
+            entered.set()
+        return original_wait(timeout)
+
+    monkeypatch.setattr(poller.cond, 'wait', wait)
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix='wait-sync-test') as worker:
+        try:
+            yield worker, entered
+        finally:
+            with poller.cond:
+                poller.off = True
+                poller.cond.notify_all()
+
+
+@pytest.fixture
+def idle_poll(poller: blockchain.EventPoller, monkeypatch: pytest.MonkeyPatch) -> Iterator[threading.Event]:
+    sleeping: threading.Event = threading.Event()
+    original_wait = poller.cond.wait_for
+    poller.poll_interval = 600
+
+    def wait(predicate: Callable[[], bool], timeout: float | None = None) -> bool:
+        assert timeout == 600
+        sleeping.set()
+        return original_wait(predicate, timeout)
+
+    monkeypatch.setattr(poller.cond, 'wait_for', wait)
+    try:
+        yield sleeping
+    finally:
+        if poller.worker is not None:
+            poller.stop()
+
+
+@pytest.mark.parametrize(('age', 'refresh', 'calls'), [(0, False, 1), (61, False, 2), (0, True, 2)])
+def test_wait_sync_refreshes_long_idle_only_when_needed(poller: blockchain.EventPoller, idle_poll: threading.Event,
+                                                      waiter: tuple[ThreadPoolExecutor, threading.Event],
+                                                      age: int, refresh: bool, calls: int) -> None:
+    head: Mock = Mock(side_effect=[5, 7])
+    poller.connection.latest_block_number = head
+    poller.off = True
+    assert poller.start(poller.contract, 4)
+    assert idle_poll.wait(1)
+    with poller.cond:
+        poller.last_check_sec = time.time() - age
+    worker, _ = waiter
+    assert worker.submit(poller.wait_sync, refresh=refresh).result(timeout=1) is True
+    assert head.call_count == calls
+    assert poller.status()['synced_block'] == (5 if calls == 1 else 7)
+    assert poller.poll_interval == 600
+
+
+def test_refresh_before_idle_predicate_is_not_lost(poller: blockchain.EventPoller, monkeypatch: pytest.MonkeyPatch,
+                                                 idle_poll: threading.Event, waiter: tuple[ThreadPoolExecutor, threading.Event]) -> None:
+    head: Mock = Mock(side_effect=[5, 7])
+    poller.connection.latest_block_number = head
+    worker, entered = waiter
+    original_wait = poller.cond.wait_for
+
+    def wait(predicate: Callable[[], bool], timeout: float | None = None) -> bool:
+        if head.call_count == 1:
+            idle_poll.set()
+            poller.cond.release()
+            try:
+                assert entered.wait(1)
+            finally:
+                poller.cond.acquire()
+        return original_wait(predicate, timeout)
+
+    monkeypatch.setattr(poller.cond, 'wait_for', wait)
+    poller.off = True
+    assert poller.start(poller.contract, 4)
+    assert idle_poll.wait(1)
+    result = worker.submit(poller.wait_sync, refresh=True)
+    assert result.result(timeout=1) is True
+    assert head.call_count == 2
+
+
+def test_concurrent_refreshes_share_one_pending_head(poller: blockchain.EventPoller, idle_poll: threading.Event) -> None:
+    fetching: threading.Event = threading.Event()
+    release : threading.Event = threading.Event()
+    calls: list[int] = []
+
+    def head() -> int:
+        calls.append(1)
+        if len(calls) == 2:
+            fetching.set()
+            assert release.wait(2)
+        return 5
+
+    poller.connection.latest_block_number = head
+    poller.off = True
+    assert poller.start(poller.contract, 4)
+    assert idle_poll.wait(1)
+    try:
+        with ThreadPoolExecutor(max_workers=3) as workers:
+            first = workers.submit(poller.wait_sync, refresh=True)
+            assert fetching.wait(1)
+            entered: list[threading.Event] = [threading.Event(), threading.Event()]
+
+            def cancel(index: int) -> bool:
+                entered[index].set()
+                return False
+
+            others = [workers.submit(poller.wait_sync, lambda index=index: cancel(index), True) for index in range(2)]
+            assert all(event.wait(1) for event in entered)
+            assert not poller.status()['synchronized']
+            release.set()
+            assert all(result.result(timeout=1) for result in [first, *others])
+    finally:
+        release.set()
+    assert len(calls) == 3
+
+
+def test_refresh_during_inflight_head_requires_a_new_request(poller: blockchain.EventPoller, idle_poll: threading.Event,
+                                                          waiter: tuple[ThreadPoolExecutor, threading.Event]) -> None:
+    fetching: threading.Event = threading.Event()
+    release : threading.Event = threading.Event()
+    calls: list[int] = []
+
+    def head() -> int:
+        calls.append(1)
+        if len(calls) == 1:
+            fetching.set()
+            assert release.wait(2)
+            return 5
+        return 7
+
+    poller.connection.latest_block_number = head
+    poller.off = True
+    assert poller.start(poller.contract, 4)
+    try:
+        assert fetching.wait(1)
+        worker, entered = waiter
+        result = worker.submit(poller.wait_sync, refresh=True)
+        assert entered.wait(1)
+        release.set()
+        assert result.result(timeout=1) is True
+        assert len(calls) == 2
+        assert poller.status()['synced_block'] == 7
+    finally:
+        release.set()
+
+
+def test_stale_waiter_reuses_a_slow_refresh_instead_of_requeuing(poller: blockchain.EventPoller, monkeypatch: pytest.MonkeyPatch,
+                                                              idle_poll: threading.Event, waiter: tuple[ThreadPoolExecutor, threading.Event]) -> None:
+    fetching: threading.Event = threading.Event()
+    cycled  : threading.Event = threading.Event()
+    release : threading.Event = threading.Event()
+    calls: list[int] = []
+    waits: list[float | None] = []
+    original_wait = poller.cond.wait
+
+    def head() -> int:
+        calls.append(1)
+        if len(calls) == 2:
+            fetching.set()
+            assert release.wait(2)
+        return 5
+
+    def wait(timeout: float | None = None) -> bool:
+        if threading.current_thread().name.startswith('wait-sync-test'):
+            waits.append(timeout)
+            if len(waits) == 2:
+                cycled.set()
+        return original_wait(timeout)
+
+    monkeypatch.setattr(poller.cond, 'wait', wait)
+    poller.connection.latest_block_number = head
+    poller.off = True
+    assert poller.start(poller.contract, 4)
+    try:
+        assert idle_poll.wait(1)
+        with poller.cond:
+            poller.last_check_sec = time.time() - 61
+        worker, _ = waiter
+        result = worker.submit(poller.wait_sync)
+        assert fetching.wait(1) and cycled.wait(1)
+        release.set()
+        assert result.result(timeout=1) is True
+        assert len(calls) == 2
+    finally:
+        release.set()
+
+
+@pytest.mark.parametrize(('age', 'refresh'), [(61, False), (0, True)])
+def test_refresh_during_persistence_survives_the_old_round(poller: blockchain.EventPoller,
+                                                        idle_poll: threading.Event, waiter: tuple[ThreadPoolExecutor, threading.Event],
+                                                        age: int, refresh: bool) -> None:
+    writing: threading.Event = threading.Event()
+    release: threading.Event = threading.Event()
+    head: Mock = Mock(side_effect=[5, 7])
+    poller.connection.latest_block_number = head
+
+    class Storage(blockchain.EventPoller.Handler):
+
+        def on_sync(self, start: int, end: int, deposits: list[blockchain.EventDeposit], withdrawals: list[blockchain.EventWithdraw]) -> None:
+            if start == 4:
+                with poller.cond:
+                    poller.last_check_sec = time.time() - age
+                writing.set()
+                assert release.wait(2)
+
+    poller.add_handler(Storage())
+    poller.off = True
+    assert poller.start(poller.contract, 4)
+    try:
+        assert writing.wait(1)
+        worker, entered = waiter
+        result = worker.submit(poller.wait_sync, refresh=refresh)
+        assert entered.wait(1)
+        assert not result.done()
+        release.set()
+        assert result.result(timeout=1) is True
+        assert head.call_count == 2
+        assert poller.status()['synced_block'] == 7
+    finally:
+        release.set()
+
+
+def test_refresh_does_not_interrupt_rpc_retry_delay(poller: blockchain.EventPoller, monkeypatch: pytest.MonkeyPatch,
+                                                  idle_poll: threading.Event, waiter: tuple[ThreadPoolExecutor, threading.Event]) -> None:
+    retrying: threading.Event = threading.Event()
+    notified: list[bool] = []
+    head: Mock = Mock(side_effect=[rpc.Error(rpc.ErrorCode.GATEWAY_TIMEOUT, ()), 5])
+    poller.connection.latest_block_number = head
+
+    def wait(interval: float, condition: threading.Condition) -> None:
+        if poller.error:
+            with condition:
+                retrying.set()
+                notified.append(condition.wait(0.1))
+
+    monkeypatch.setattr(blockchain.util, 'wait', wait)
+    poller.off = True
+    assert poller.start(poller.contract, 4)
+    assert retrying.wait(1)
+    worker, entered = waiter
+    result = worker.submit(poller.wait_sync, refresh=True)
+    assert entered.wait(1)
+    assert result.result(timeout=1) is True
+    assert notified == [False]
+
+
+@pytest.mark.parametrize('state', ['connecting', 'syncing', 'retrying', 'stale'])
+def test_wait_sync_resumes_only_when_ready_and_fresh(poller: blockchain.EventPoller,
+                                                   waiter: tuple[ThreadPoolExecutor, threading.Event], state: str) -> None:
+    poller.current        = 6
+    poller.latest_block   = None if state == 'connecting' else 5
+    poller.caught_up      = state != 'connecting'
+    poller.error          = 'GATEWAY_TIMEOUT' if state == 'retrying' else None
+    poller.last_check_sec = time.time() - 61 if state == 'stale' else time.time()
+    if state == 'syncing':
+        poller.current = 4
+    worker, entered = waiter
+    result = worker.submit(poller.wait_sync)
+    assert entered.wait(1)
+    assert not result.done()
+    with poller.cond:
+        poller.current        = 6
+        poller.latest_block   = 5
+        poller.caught_up      = True
+        poller.error          = None
+        poller.last_check_sec = time.time()
+        poller.refresh_needed = False
+        poller.cond.notify_all()
+    assert result.result(timeout=1) is True
+
+
+def test_wait_sync_cancel_exits_without_a_notification(poller: blockchain.EventPoller,
+                                                      waiter: tuple[ThreadPoolExecutor, threading.Event]) -> None:
+    worker, entered = waiter
+    cancel: threading.Event = threading.Event()
+    result = worker.submit(poller.wait_sync, cancel.is_set)
+    assert entered.wait(1)
+    cancel.set()
+    assert result.result(timeout=1) is False
+
+
+def test_wait_sync_stop_wakes_waiter(poller: blockchain.EventPoller,
+                                   waiter: tuple[ThreadPoolExecutor, threading.Event]) -> None:
+    worker, entered = waiter
+    result = worker.submit(poller.wait_sync)
+    assert entered.wait(1)
+    poller.worker = threading.Thread(target=lambda: None)
+    poller.worker.start()
+    poller.stop()
+    assert result.result(timeout=1) is False
+
+
+@pytest.mark.parametrize('fail', [False, True])
+def test_wait_sync_waits_for_persistence_then_catchup(poller: blockchain.EventPoller, monkeypatch: pytest.MonkeyPatch,
+                                                   waiter: tuple[ThreadPoolExecutor, threading.Event], fail: bool) -> None:
+    writing: threading.Event = threading.Event()
+    release: threading.Event = threading.Event()
+
+    class Storage(blockchain.EventPoller.Handler):
+
+        def on_sync(self, start: int, end: int, deposits: list[blockchain.EventDeposit], withdrawals: list[blockchain.EventWithdraw]) -> None:
+            writing.set()
+            assert release.wait(2)
+            if fail:
+                raise RuntimeError('database write failed')
+
+    def wait(interval: float, condition: threading.Condition) -> None:
+        if interval == poller.poll_interval:
+            with condition:
+                condition.wait(2)
+
+    monkeypatch.setattr(blockchain.util, 'wait', wait)
+    poller.add_handler(Storage())
+    poller.off = True
+    assert poller.start(poller.contract, 4)
+    try:
+        assert writing.wait(1)
+        worker, entered = waiter
+        result = worker.submit(poller.wait_sync)
+        assert entered.wait(1)
+        assert not result.done()
+        assert poller.status()['synced_block'] == 3
+        release.set()
+        assert result.result(timeout=1) is (not fail)
+        assert poller.status()['synced_block'] == (3 if fail else 5)
+    finally:
+        release.set()
+        poller.stop()
+
+
+def test_wait_sync_survives_rpc_retry_until_recovery(poller: blockchain.EventPoller, monkeypatch: pytest.MonkeyPatch,
+                                                   waiter: tuple[ThreadPoolExecutor, threading.Event]) -> None:
+    retrying: threading.Event = threading.Event()
+    release : threading.Event = threading.Event()
+    latest = iter([rpc.Error(rpc.ErrorCode.GATEWAY_TIMEOUT, ()), 5])
+    poller.connection.latest_block_number = lambda: next(latest)
+
+    def wait(interval: float, condition: threading.Condition) -> None:
+        if poller.error:
+            retrying.set()
+            assert release.wait(2)
+        elif interval == poller.poll_interval:
+            with condition:
+                condition.wait(2)
+
+    monkeypatch.setattr(blockchain.util, 'wait', wait)
+    poller.off = True
+    assert poller.start(poller.contract, 4)
+    try:
+        assert retrying.wait(1)
+        worker, entered = waiter
+        result = worker.submit(poller.wait_sync)
+        assert entered.wait(1)
+        assert not result.done()
+        release.set()
+        assert result.result(timeout=1) is True
+    finally:
+        release.set()
+        poller.stop()
 
 
 @pytest.mark.parametrize('start_block', [0, 516_873_190, 517_143_055])

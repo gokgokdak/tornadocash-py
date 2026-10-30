@@ -2,6 +2,7 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from enum import Enum
+from typing import Callable
 from eth_typing import ChecksumAddress
 from hexbytes import HexBytes
 from web3 import Web3
@@ -179,6 +180,7 @@ class EventPoller(object):
         self.error         : str | None                = None
         self.activity      : EventPoller.Activity      = EventPoller.Activity.IDLE
         self.caught_up     : bool                      = False
+        self.refresh_needed: bool                      = False
         self.deposits      : int                       = 0
         self.withdrawals   : int                       = 0
         if self.connection is None:
@@ -208,6 +210,7 @@ class EventPoller(object):
             self.current        = self.start_block = start_block
             self.latest_block   = self.last_check_sec = self.error = None
             self.caught_up      = False
+            self.refresh_needed = False
             self.activity       = EventPoller.Activity.FETCHING_HEAD
             self.deposits       = self.withdrawals = 0
             self.cond.notify_all()
@@ -235,6 +238,26 @@ class EventPoller(object):
     def is_started(self) -> bool:
         return not self.off
 
+    def wait_sync(self, cancel: Callable[[], bool] | None = None, refresh: bool = False) -> bool:
+        """Wait for a fresh persisted head; cancel only checks flags, refresh requests a new head."""
+        with self.cond:
+            while not self.off:
+                if cancel is not None and cancel():
+                    return False
+                sync      : dict         = self.status()
+                last_check: float | None = sync['last_check_sec']
+                fresh     : bool         = last_check is not None and time.time() - last_check <= 60
+                if sync['synchronized'] and fresh and not refresh:
+                    return True
+                if (refresh or (not fresh and self.activity != EventPoller.Activity.FETCHING_HEAD)) and not self.refresh_needed:
+                    self.refresh_needed = True
+                    self.caught_up      = False
+                    if sync['synchronized'] and self.activity == EventPoller.Activity.IDLE:
+                        self.cond.notify_all()
+                refresh = False
+                self.cond.wait(0.5)
+            return False
+
     def status(self) -> dict:
         """Progress advances only after the synchronization handlers succeed."""
         with self.cond:
@@ -247,7 +270,7 @@ class EventPoller(object):
             elif self.latest_block is None:
                 phase = 'connecting'
             else:
-                phase = 'ready' if self.caught_up and remaining == 0 else 'syncing'
+                phase = 'ready' if self.caught_up and remaining == 0 and not self.refresh_needed else 'syncing'
             progress: float | None = None
             if phase in ('syncing', 'ready'):
                 progress = float(synced >= 0) if self.latest_block == 0 else min(1.0, max(0.0, synced / self.latest_block))
@@ -300,6 +323,7 @@ class EventPoller(object):
             while not self.off:
                 with self.cond:
                     self.activity       = EventPoller.Activity.FETCHING_HEAD
+                    self.refresh_needed = False
                 latest = self.connection.latest_block_number()
                 if not rpc.is_error(latest):
                     break
@@ -427,10 +451,10 @@ class EventPoller(object):
                     for h in self.handlers:
                         h.on_first_catchup()
                 with self.cond:
-                    self.caught_up = True
+                    self.caught_up = not self.refresh_needed
                     self.error     = None
                     self.activity  = EventPoller.Activity.IDLE
                     self.cond.notify_all()
                 # Sleep interval if no new block
-                if not self.off:
-                    util.wait(Second(self.poll_interval), self.cond)
+                with self.cond:
+                    self.cond.wait_for(lambda: self.off or self.refresh_needed, timeout=Second(self.poll_interval))
