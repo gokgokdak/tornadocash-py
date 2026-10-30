@@ -1,3 +1,5 @@
+import { connectWalletConnect } from './wallet.js';
+
 const $ = (id) => document.getElementById(id);
 const number = (value) => value == null ? '—' : Number(value).toLocaleString('en-US');
 const pending = new Map();
@@ -34,7 +36,7 @@ function message(text, error = false) {
     $('message').textContent = text;
     $('message').dataset.error = error;
     let target = $('message');
-    for (const name of ['backup']) {
+    for (const name of ['backup', 'wallet']) {
         if (!$(`${name}-dialog`).open) continue;
         target = $(`${name}-message`);
         target.textContent = text;
@@ -223,6 +225,10 @@ function updateControls() {
     $('wallet').disabled = busy;
     $('wallet').textContent = account ? `${account.slice(0, 6)}…${account.slice(-4)}` : 'Connect wallet';
     $('wallet').title = account ? `${account} · wallet chain ${Number(walletChain) || 'unknown'}` : 'Connect an Ethereum wallet';
+    $('connect-browser').disabled = busy;
+    $('connect-walletconnect').disabled = busy;
+    $('disconnect-wallet').disabled = busy;
+    $('disconnect-wallet').hidden = !provider;
     $('confirm-deposit').disabled = busy;
     $('approve-token').disabled = busy;
     $('cancel-deposit').disabled = busy;
@@ -240,8 +246,12 @@ async function run(action) {
 
 async function wallet(instance) {
     if (!provider) {
-        if (!window.ethereum) throw new Error('No browser wallet found. Open this page in a browser with an Ethereum wallet.');
-        bindWallet(window.ethereum);
+        if (window.ethereum) bindWallet(window.ethereum);
+        else {
+            checkBackend(instance?.id || selected);
+            message('Connecting through WalletConnect…');
+            bindWallet(await connectWalletConnect(snapshot.walletconnect_project_id, walletChains()));
+        }
     }
     const currentProvider = provider;
     message('Requesting wallet account access. Confirm in your wallet if prompted…');
@@ -316,10 +326,33 @@ $('clear-logs').onclick = () => { $('logs').replaceChildren(); updateLogStatus()
 $('auto-scroll').onchange = () => { if ($('auto-scroll').checked) $('logs').scrollTop = $('logs').scrollHeight; };
 $('live-logs').ontoggle = () => { if ($('live-logs').open && $('auto-scroll').checked) $('logs').scrollTop = $('logs').scrollHeight; };
 $('token').onchange = () => { selected = snapshot.instances.find((item) => item.chain_id === pool()?.chain_id && item.symbol === $('token').value)?.id || ''; renderPools(); renderStatus(); };
-$('wallet').onclick = () => run(async () => {
+$('wallet').onclick = () => { message(''); $('wallet-message').textContent = ''; $('wallet-dialog').showModal(); };
+$('close-wallet').onclick = () => $('wallet-dialog').close();
+$('connect-browser').onclick = () => run(async () => {
+    if (!window.ethereum) throw new Error('No browser wallet found. Use WalletConnect instead.');
+    bindWallet(window.ethereum);
+    await wallet(pool());
+    $('wallet-dialog').close();
+    message('Wallet connected.');
+});
+$('connect-walletconnect').onclick = () => run(async () => {
+    checkBackend(selected);
+    bindWallet(await connectWalletConnect(snapshot.walletconnect_project_id, walletChains()));
     await wallet(pool());
     message('Wallet connected.');
 });
+$('disconnect-wallet').onclick = () => run(async () => {
+    const previous = provider;
+    bindWallet(null);
+    await previous?.disconnect?.();
+    $('wallet-dialog').close();
+    message('Wallet disconnected.');
+});
+$('copy-wallet-uri').onclick = async () => {
+    if (!$('wallet-uri').value) { message('Waiting for the connection link…', true); return; }
+    try { await navigator.clipboard.writeText($('wallet-uri').value); message('Connection link copied.'); }
+    catch { $('wallet-uri').focus(); $('wallet-uri').select(); message('Select and copy the connection link manually.', true); }
+};
 for (const name of ['deposit', 'withdraw']) {
     $(`${name}-panel`).addEventListener('invalid', (event) => message(event.target.validationMessage, true), true);
     $(`${name}-tab`).onclick = () => {
@@ -419,6 +452,10 @@ $('withdraw-panel').onsubmit = (event) => {
         }
     });
 };
+function walletChains() {
+    return [...new Set(snapshot.instances.map((item) => item.chain_id))];
+}
+
 function bindWallet(next) {
     provider = next;
     account = walletChain = '';

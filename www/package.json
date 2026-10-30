@@ -1,0 +1,15 @@
+{
+  "name": "tornadocash-py-webui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild lib/walletconnect.js --bundle --format=esm --platform=browser --target=safari15 --minify --legal-comments=linked --outfile=vendor/walletconnect.js"
+  },
+  "dependencies": {
+    "@walletconnect/ethereum-provider": "2.26.0",
+    "qrcode": "1.5.4"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

@@ -115,7 +115,7 @@ progress::-moz-progress-bar { background: var(--green); }
 #approve-token { margin-bottom: 12px; }
 #message { margin-top: 22px; overflow-wrap: anywhere; color: var(--green); }
 #message:empty { display: none; }
-#message[data-error=true], #backup-message[data-error=true] { color: #ff728d; }
+#message[data-error=true], #backup-message[data-error=true], #wallet-message[data-error=true] { color: #ff728d; }
 footer { display: flex; justify-content: space-between; color: #6b6b6b; font-size: 12px; padding-bottom: 28px; gap: 16px; }
 dialog { width: 440px; max-width: calc(100% - 32px); padding: 24px; border: 1px solid var(--green); border-radius: 4px; color: #eee; background: var(--background); }
 dialog::backdrop { background: rgba(5, 5, 5, .86); }
@@ -126,6 +126,10 @@ dialog textarea { min-height: 140px; color: var(--green); font-size: 12px; margi
 .note-tools button { flex: 1; padding-left: 8px; padding-right: 8px; }
 .backup-check { display: flex; align-items: center; gap: 8px; margin: 22px 0 16px; font-size: 12px; }
 #backup-message { overflow-wrap: anywhere; margin: 18px 0; }
+#wallet-message { overflow-wrap: anywhere; margin-top: 18px; }
+#wallet-qr { margin-top: 20px; }
+#wallet-qr-image { display: block; max-width: 100%; height: auto; margin: 0 auto 16px; }
+#wallet-uri { font-size: 11px; margin-bottom: 12px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 @media (max-width: 1008px) { .container { margin-left: 24px; margin-right: 24px; } .columns { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .header { gap: 24px; } }
 @media (max-width: 760px) { .header { flex-wrap: wrap; gap: 20px; } .wallet-controls { width: 100%; margin-left: 0; } .wallet-controls select, .wallet-controls button { flex: 1; } .docs { margin-left: auto; } main.container { padding-top: 30px; } .columns { grid-template-columns: minmax(0, 440px); justify-content: center; gap: 32px; } .instances { margin-top: 32px; } .corner { font-size: 18px; } .section-title { align-items: baseline; } .section-title .muted { font-size: 11px; } }

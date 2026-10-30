@@ -1,0 +1,130 @@
+Bundled license information:
+
+tslib/tslib.es6.js:
+  /*! *****************************************************************************
+  Copyright (c) Microsoft Corporation.
+  
+  Permission to use, copy, modify, and/or distribute this software for any
+  purpose with or without fee is hereby granted.
+  
+  THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+  REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+  AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+  INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+  LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+  OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+  PERFORMANCE OF THIS SOFTWARE.
+  ***************************************************************************** */
+
+@scure/base/lib/esm/index.js:
+  /*! scure-base - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+
+@noble/ciphers/esm/utils.js:
+@walletconnect/utils/dist/index.js:
+  /*! noble-ciphers - MIT License (c) 2023 Paul Miller (paulmillr.com) */
+
+@scure/bip39/esm/index.js:
+  /*! scure-bip39 - MIT License (c) 2022 Patricio Palladino, Paul Miller (paulmillr.com) */
+
+@walletconnect/relay-auth/dist/index.es.js:
+  /*! noble-hashes - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+  /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+
+@noble/hashes/esm/utils.js:
+@noble/hashes/esm/utils.js:
+@noble/hashes/esm/utils.js:
+  /*! noble-hashes - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+
+@noble/curves/esm/abstract/utils.js:
+@noble/curves/esm/abstract/modular.js:
+@noble/curves/esm/abstract/curve.js:
+@noble/curves/esm/abstract/weierstrass.js:
+@noble/curves/esm/_shortw_utils.js:
+@noble/curves/esm/secp256k1.js:
+@noble/curves/esm/abstract/utils.js:
+@noble/curves/esm/abstract/modular.js:
+@noble/curves/esm/abstract/curve.js:
+@noble/curves/esm/abstract/weierstrass.js:
+@noble/curves/esm/_shortw_utils.js:
+@noble/curves/esm/secp256k1.js:
+@noble/curves/esm/abstract/utils.js:
+@noble/curves/esm/abstract/modular.js:
+@noble/curves/esm/abstract/curve.js:
+@noble/curves/esm/abstract/weierstrass.js:
+@noble/curves/esm/_shortw_utils.js:
+@noble/curves/esm/secp256k1.js:
+@noble/curves/esm/utils.js:
+@noble/curves/esm/abstract/modular.js:
+@noble/curves/esm/abstract/curve.js:
+@noble/curves/esm/abstract/edwards.js:
+@noble/curves/esm/abstract/montgomery.js:
+@noble/curves/esm/ed25519.js:
+@noble/curves/esm/abstract/weierstrass.js:
+@noble/curves/esm/_shortw_utils.js:
+@noble/curves/esm/nist.js:
+@noble/curves/esm/p256.js:
+  /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+
+@lit/reactive-element/css-tag.js:
+@lit/reactive-element/css-tag.mjs:
+  /**
+   * @license
+   * Copyright 2019 Google LLC
+   * SPDX-License-Identifier: BSD-3-Clause
+   */
+
+@lit/reactive-element/reactive-element.js:
+lit-html/lit-html.js:
+lit-element/lit-element.js:
+@lit/reactive-element/decorators/custom-element.js:
+@lit/reactive-element/decorators/property.js:
+@lit/reactive-element/decorators/state.js:
+@lit/reactive-element/decorators/event-options.js:
+@lit/reactive-element/decorators/base.js:
+@lit/reactive-element/decorators/query.js:
+@lit/reactive-element/decorators/query-all.js:
+@lit/reactive-element/decorators/query-async.js:
+@lit/reactive-element/decorators/query-assigned-nodes.js:
+@lit/reactive-element/reactive-element.mjs:
+lit-html/lit-html.mjs:
+lit-element/lit-element.mjs:
+@lit/reactive-element/decorators/custom-element.mjs:
+@lit/reactive-element/decorators/property.mjs:
+lit-html/directive.js:
+lit-html/async-directive.js:
+  /**
+   * @license
+   * Copyright 2017 Google LLC
+   * SPDX-License-Identifier: BSD-3-Clause
+   */
+
+lit-html/is-server.js:
+  /**
+   * @license
+   * Copyright 2022 Google LLC
+   * SPDX-License-Identifier: BSD-3-Clause
+   */
+
+@lit/reactive-element/decorators/query-assigned-elements.js:
+  /**
+   * @license
+   * Copyright 2021 Google LLC
+   * SPDX-License-Identifier: BSD-3-Clause
+   */
+
+lit-html/directives/if-defined.js:
+lit-html/directives/class-map.js:
+  /**
+   * @license
+   * Copyright 2018 Google LLC
+   * SPDX-License-Identifier: BSD-3-Clause
+   */
+
+lit-html/static.js:
+lit-html/directive-helpers.js:
+lit-html/directives/ref.js:
+  /**
+   * @license
+   * Copyright 2020 Google LLC
+   * SPDX-License-Identifier: BSD-3-Clause
+   */
