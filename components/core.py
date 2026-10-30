@@ -1,5 +1,6 @@
 import requests
 import threading
+from typing import Callable
 from eth_account.datastructures import SignedTransaction
 from eth_typing import ChecksumAddress
 from hexbytes import HexBytes
@@ -435,13 +436,15 @@ class Tornado(EventPoller.Handler):
     # @param    key_or_relayer  The private key to pay the gas fee, or the URL of the relayer
     # @param    nonce           The nonce of the withdrawer address, if None and not using relayer, will be queried from the blockchain
     # @param    refund          Amount to send to the recipient, make sure the `key_or_relayer` is a key and has enough balance
+    # @param    can_submit      Optional readiness check immediately before submitting to a relayer
     # @return   HexBytes of transaction hash on success, None if failed
     def withdraw(self,
                  note: Note,
                  recipient: ChecksumAddress,
                  key_or_relayer: Key | str,
                  nonce: Nonce | rpc.Error | None = None,
-                 refund: Wei = Wei(0)) -> HexBytes | None:
+                 refund: Wei = Wei(0),
+                 can_submit: Callable[[], bool] | None = None) -> HexBytes | None:
         if self.sync_only:
             log.error(self.tag, f'withdraw(to={recipient}), not available in sync-only mode')
             return None
@@ -539,6 +542,9 @@ class Tornado(EventPoller.Handler):
         # Make withdrawal via relayer
         if use_relayer:
             self._progress('Submitting withdrawal to relayer')
+            if can_submit is not None and not can_submit():
+                log.error(self.tag, 'Withdrawal canceled: backend request is no longer active')
+                return None
             # Submit withdrawal to relayer and get job ID
             try:
                 resp: Response = requests.post(

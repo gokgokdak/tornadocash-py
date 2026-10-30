@@ -350,7 +350,7 @@ def test_relayer_reuses_preparation_after_explicit_full_init(tornado: core.Torna
     get, post = relayer_requests(tornado, monkeypatch)
     tornado.sync_only = True
     assert tornado.init(sync_only=False)
-    assert tornado.withdraw(note, RECIPIENT, 'https://relayer.example') == HASH
+    assert tornado.withdraw(note, RECIPIENT, 'https://relayer.example', can_submit=lambda: True) == HASH
     assert tornado.sync_only is False
     tornado.zksnark.prove.assert_called_once()
     assert all('timeout' not in call.kwargs for call in get.call_args_list + post.call_args_list)
@@ -424,3 +424,32 @@ def test_relayer_reports_submission_and_job_stages(tornado: core.Tornado, note: 
     assert messages[-4:] == ['Submitting withdrawal to relayer', 'Waiting for relayer job',
                              'Checking relayer job: attempt 1/10', 'Relayer job: confirmed']
     assert all(RECIPIENT not in message and 'relayer.example' not in message for message in messages)
+
+
+def test_relayer_checks_cancellation_after_reporting_submission(tornado: core.Tornado, note: Note, monkeypatch: pytest.MonkeyPatch) -> None:
+    get, post = relayer_requests(tornado, monkeypatch)
+    ready: list[bool] = [True]
+
+    def progress(message: str) -> None:
+        if message == 'Submitting withdrawal to relayer':
+            ready[0] = False
+
+    tornado.handlers = [SimpleNamespace(on_progress=progress)]
+    assert tornado.withdraw(note, RECIPIENT, 'https://relayer.example', can_submit=lambda: ready[0]) is None
+    post.assert_not_called()
+
+
+def test_relayer_cannot_submit_after_proving_changes_sync_state(tornado: core.Tornado, note: Note, monkeypatch: pytest.MonkeyPatch) -> None:
+    get, post = relayer_requests(tornado, monkeypatch)
+    ready = [True]
+    proof = tornado.zksnark.prove.return_value
+
+    def prove(circuit: CircuitInput) -> dict[str, Any]:
+        ready[0] = False
+        return proof
+
+    tornado.zksnark.prove.side_effect = prove
+    assert tornado.withdraw(note, RECIPIENT, 'https://relayer.example', can_submit=lambda: ready[0]) is None
+    tornado.zksnark.verify.assert_called_once()
+    get.assert_called_once_with('https://relayer.example/status')
+    post.assert_not_called()
