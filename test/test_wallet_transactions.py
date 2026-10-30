@@ -131,6 +131,21 @@ def test_explicit_full_init_builds_tree_atomically_and_future_sync_appends(torna
     tornado.connection.sign_transaction.assert_not_called()
 
 
+def test_tree_initialization_forwards_real_layer_progress(tornado: core.Tornado, note: Note, monkeypatch: pytest.MonkeyPatch) -> None:
+    messages: list[str] = []
+    tornado.handlers = [SimpleNamespace(on_progress=messages.append)]
+    tornado.sync_only, tornado.tree = True, None
+    tornado.db.get_commitments.return_value = [note.commitment]
+    monkeypatch.setattr(core.config, 'MERKLE_TREE_HEIGHT', 3)
+    assert tornado.init(sync_only=False)
+    assert messages == ['Reading commitments from database', 'Preparing Merkle tree',
+                        'Rebuilding Merkle tree: level 1/3 · 0/1 nodes', 'Rebuilding Merkle tree: level 1/3 · 1/1 nodes',
+                        'Rebuilding Merkle tree: level 2/3 · 0/1 nodes', 'Rebuilding Merkle tree: level 2/3 · 1/1 nodes',
+                        'Rebuilding Merkle tree: level 3/3 · 0/1 nodes', 'Rebuilding Merkle tree: level 3/3 · 1/1 nodes',
+                        'Merkle tree ready']
+    assert tornado.tree.size() == 1 and not tornado.sync_only
+
+
 @pytest.mark.parametrize('with_deposit', [False, True])
 def test_sync_records_update_time_before_notifying(tornado: core.Tornado, monkeypatch: pytest.MonkeyPatch, with_deposit: bool) -> None:
     updated: Second = Second(1234)
