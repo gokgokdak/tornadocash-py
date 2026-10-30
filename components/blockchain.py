@@ -164,6 +164,7 @@ class EventPoller(object):
         self.worker        : threading.Thread | None   = None
         self.handlers      : list[EventPoller.Handler] = []
         self.poll_interval : float                     = config.BLOCKCHAIN_LOG_EVENT_POLL_INTERVAL_SEC if poll_interval is None else poll_interval
+        self.error         : str | None                = None
         if self.connection is None:
             self.connection = rpc.Connection(self.chain, config.RPC_URLS[self.chain])
 
@@ -176,6 +177,8 @@ class EventPoller(object):
         if not self.off:
             log.warn(self.tag, 'start() already started')
             return False
+        if self.worker is not None:
+            self.stop()
         if not self.external:
             if not self.connection.start():
                 log.error(self.tag, f'Failed to start RPC connection for {self.chain}')
@@ -183,28 +186,31 @@ class EventPoller(object):
         elif not self.connection.started():
             log.error(self.tag, 'The external RPC connection is not started')
             return False
-        self.off      = False
-        self.contract = contract
-        self.current  = start_block
-        self.worker   = threading.Thread(target=self._loop)
+        with self.cond:
+            self.off            = False
+            self.contract       = contract
+            self.current        = start_block
+            self.error          = None
+            self.cond.notify_all()
+        self.worker = threading.Thread(target=self._loop)
         self.worker.start()
         log.debug(self.tag, f'start(contract={contract}, start_block={start_block}, events={[e.event_name() for e in self.events]})')
         return True
 
     def stop(self) -> None:
-        if self.off:
+        if self.off and self.worker is None:
             log.warn(self.tag, 'stop() already stopped')
             return
         log.debug(self.tag, 'stop() shutting down')
-        self.off = True
         with self.cond:
+            self.off = True
             self.cond.notify_all()
         self.worker.join()
         if not self.external:
             if self.connection.started():
                 self.connection.stop()
-        self.worker     = None
-        self.contract   = None
+        self.worker   = None
+        self.contract = None
         log.debug(self.tag, 'stop() done')
 
     def is_started(self) -> bool:
@@ -219,6 +225,22 @@ class EventPoller(object):
             self.handlers.clear()
 
     def _loop(self) -> None:
+        try:
+            self._poll()
+        except Exception as e:
+            with self.cond:
+                self.error = str(e) or type(e).__name__
+                self.off   = True
+                self.cond.notify_all()
+            log.error(self.tag, f'Synchronization stopped: {self.error}')
+        finally:
+            with self.cond:
+                self.off      = True
+                self.cond.notify_all()
+            if not self.external and self.connection.started():
+                self.connection.stop()
+
+    def _poll(self) -> None:
         first_loop: bool = True
         while not self.off:
             latest: int | rpc.Error = 0
