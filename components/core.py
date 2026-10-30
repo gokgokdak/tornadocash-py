@@ -32,6 +32,10 @@ class Tornado(EventPoller.Handler):
             """Called when the latest block number is updated."""
             pass
 
+        def on_progress(self, message: str) -> None:
+            """Called before an operation starts its next step."""
+            pass
+
     def __init__(self, chain: ChainID, symbol: Symbol, unit: TornadoUnit, connection: rpc.Interface | None = None):
         self.tag                : str                          = f'{__class__.__name__}'
         self.chain              : ChainID                      = chain
@@ -122,16 +126,19 @@ class Tornado(EventPoller.Handler):
         with self.mutex:
             if self.tree is None:
                 log.info(self.tag, 'Rebuilding merkle tree from database, please wait...')
+                self._progress('Reading commitments from database')
                 commitments: list[HexBytes] | None = self.db.get_commitments()
                 if commitments is None:
                     log.error(self.tag, 'init() failed to get commitments from database')
                     return False
                 try:
+                    self._progress('Preparing Merkle tree')
                     self.tree = merkle_tree.create(merkle_tree.ImplType.MEMORY, config.MERKLE_TREE_HEIGHT, commitments)
                 except ValueError:
                     log.error(self.tag, 'init() failed to rebuild the merkle tree')
                     return False
                 log.info(self.tag, 'Merkle tree ready')
+                self._progress('Merkle tree ready')
             self.sync_only = False
         return True
 
@@ -166,6 +173,10 @@ class Tornado(EventPoller.Handler):
     def remove_all_handlers(self) -> None:
         with self.mutex:
             self.handlers.clear()
+
+    def _progress(self, message: str) -> None:
+        for h in self.handlers[:]:
+            h.on_progress(message)
 
     # Check if a note has been deposited
     # @param    commitment      The commitment to query
@@ -203,6 +214,7 @@ class Tornado(EventPoller.Handler):
     # @return   TxParams of the unsigned transaction on success, None if failed
     def approve_tx(self, address: ChecksumAddress, nonce: Nonce | rpc.Error | None = None) -> TxParams | None:
         if nonce is None:
+            self._progress('Fetching approval transaction nonce')
             nonce = self.connection.nonce(address)
             if rpc.is_error(nonce):
                 log.error(self.tag, f'approve_tx(), failed to get nonce, RPC error: {nonce.code.value}')
@@ -212,6 +224,7 @@ class Tornado(EventPoller.Handler):
             'chainId': self.chain.value,
             'nonce'  : Nonce(nonce),
         }
+        self._progress('Building approval transaction')
         built_tx: TxParams | rpc.Error = rpc.contract_build_tx(
             self.token_contract, 'approve', tx,
             self.proxy_address, unit_to_wei(self.unit, self.meta.decimals[self.symbol])
@@ -268,6 +281,7 @@ class Tornado(EventPoller.Handler):
     # @return   TxParams of the unsigned transaction on success, None if failed
     def deposit_tx(self, commitment: HexBytes, from_address: ChecksumAddress, nonce: Nonce | rpc.Error | None = None) -> TxParams | None:
         if nonce is None:
+            self._progress('Fetching deposit transaction nonce')
             nonce = self.connection.nonce(from_address)
             if rpc.is_error(nonce):
                 log.error(self.tag, f'deposit_tx(from={from_address}), failed to get nonce, RPC error: {nonce.code.value}')
@@ -279,6 +293,7 @@ class Tornado(EventPoller.Handler):
         }
         if SymbolType.NATIVE == get_symbol_type(self.symbol):
             tx['value'] = unit_to_wei(self.unit, self.meta.decimals[self.symbol])
+        self._progress('Building deposit transaction')
         built_tx: TxParams | rpc.Error = rpc.contract_build_tx(self.proxy_contract, 'deposit', tx, self.deployment_address, commitment, b'')
         if rpc.is_error(built_tx):
             log.error(self.tag, f'deposit_tx(from={from_address}), failed to build transaction, RPC error: {built_tx.code.value}')
@@ -337,12 +352,14 @@ class Tornado(EventPoller.Handler):
         if self.sync_only or self.tree is None:
             log.error(self.tag, 'prepare_withdraw(), full initialization is required before withdrawal')
             return None
+        self._progress('Reading Merkle path')
         with self.mutex:
             index       : int | None         = self.tree.get_index(note.commitment)
             merkle_proof: MerkleProof | None = self.tree.get_merkle_proof(index) if index is not None else None
         if merkle_proof is None:
             log.error(self.tag, 'prepare_withdraw(), deposit is missing from the local tree')
             return None
+        self._progress('Generating zero-knowledge proof')
         # Get ZK proof
         zk_proof: dict | None = self.zksnark.prove(CircuitInput(
             merkle_proof=merkle_proof,
@@ -356,6 +373,7 @@ class Tornado(EventPoller.Handler):
             log.error(self.tag, 'prepare_withdraw(), failed to generate proof')
             return None
         # ZK Verify
+        self._progress('Verifying zero-knowledge proof')
         if not self.zksnark.verify(zk_proof):
             log.error(self.tag, 'prepare_withdraw(), failed to verify proof')
             return None
@@ -380,6 +398,7 @@ class Tornado(EventPoller.Handler):
                     nonce: Nonce | rpc.Error | None = None,
                     refund: Wei = Wei(0)) -> TxParams | None:
         if nonce is None:
+            self._progress('Fetching withdrawal transaction nonce')
             nonce = self.connection.nonce(withdrawer)
             if rpc.is_error(nonce):
                 log.error(self.tag, f'withdraw_tx(withdrawer={withdrawer}, recipient={recipient}), failed to get withdrawer nonce, RPC error: {nonce.code.value}')
@@ -389,6 +408,7 @@ class Tornado(EventPoller.Handler):
             'chainId': self.chain.value,
             'nonce'  : Nonce(nonce),
         }
+        self._progress('Building withdrawal transaction')
         built_tx: TxParams | rpc.Error = rpc.contract_build_tx(
             self.proxy_contract, 'withdraw', tx,
             self.deployment_address,
@@ -438,6 +458,7 @@ class Tornado(EventPoller.Handler):
         relayer_fee       : Wei                = Wei(0)
         if use_relayer:
             # HTTP Get relayer status
+            self._progress('Fetching relayer status')
             try:
                 resp: Response = requests.get(relayer_url.rstrip('/') + '/status')
             except BaseException as e:
@@ -479,6 +500,7 @@ class Tornado(EventPoller.Handler):
                 log.error(self.tag, f'withdraw(to={recipient}), invalid relayer status format, exception: {e}, response: {relayer_status}')
                 return None
             # Calculate fee
+            self._progress('Calculating relayer fee')
             decimal_points: int = 0 if '.' not in config.RELAYER_FEE_RATE else len(config.RELAYER_FEE_RATE.split('.')[1])
             round_decimal : int = 10 ** decimal_points
             fee_percent   : Wei = Wei(
@@ -512,6 +534,7 @@ class Tornado(EventPoller.Handler):
 
         # Make withdrawal via relayer
         if use_relayer:
+            self._progress('Submitting withdrawal to relayer')
             # Submit withdrawal to relayer and get job ID
             try:
                 resp: Response = requests.post(
@@ -546,10 +569,12 @@ class Tornado(EventPoller.Handler):
             count_attempts    : int = 0
             count_attempts_max: int = 10
             log.info(self.tag, f'withdraw(to={recipient}), waiting for job to be processed')
+            self._progress('Waiting for relayer job')
             wait(Second(5))
             def recursive_query():
                 nonlocal count_attempts
                 nonlocal count_attempts_max
+                self._progress(f'Checking relayer job: attempt {count_attempts + 1}/{count_attempts_max}')
                 try:
                     resp: Response = requests.get(relayer_url.rstrip('/') + f'/v1/jobs/{job_id}')
                 except BaseException as e:
@@ -573,6 +598,8 @@ class Tornado(EventPoller.Handler):
                 except BaseException as e:
                     log.error(self.tag, f'withdraw(to={recipient}), failed to parse relayer job response to JSON, exception: {e}, response: {resp}')
                     return None
+                if result['status'] in ('QUEUED', 'ACCEPTED', 'SENT', 'MINED', 'RESUBMITTED', 'CONFIRMED', 'FAILED'):
+                    self._progress(f'Relayer job: {result["status"].lower()}')
                 if result['status'] == 'MINED' or result['status'] == 'CONFIRMED':
                     try:
                         relayer_tx_hash: str = result['txHash']
