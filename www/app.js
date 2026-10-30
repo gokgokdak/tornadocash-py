@@ -5,6 +5,12 @@ let socket, sequence = 0, snapshot = { instances: [] };
 let selected = '', poolList = '', account = '', walletChain = '', busy = false, draft = null;
 let provider;
 const providers = new WeakSet();
+const states = {
+    starting: 'Starting', connecting: 'Connecting RPC', retrying: 'Retrying RPC',
+    initializing: 'Initializing', syncing: 'Syncing', ready: 'Ready', error: 'Error',
+    stopped: 'Stopped',
+};
+const stateLabel = (state) => states[state] || state?.replaceAll('_', ' ') || 'Starting';
 const noteId = (note) => (note || '').trim().split('-').slice(0, 3).join('-').toLowerCase();
 
 function checkBackend(id) {
@@ -78,6 +84,13 @@ function connect() {
     socket.onerror = () => socket.close();
 }
 
+function hasProgress(item) {
+    return socket?.readyState === WebSocket.OPEN
+        && !['starting', 'connecting', 'retrying', 'initializing', 'error', 'stopped'].includes(item?.state)
+        && ['syncing', 'ready'].includes(item?.sync_state || item?.state)
+        && Number.isFinite(item?.progress) && item.latest_block != null;
+}
+
 const pool = () => snapshot.instances.find((item) => item.id === selected);
 
 function options(select, values, value) {
@@ -100,11 +113,72 @@ function renderPools() {
         label.append(radio, element('span', `${item.unit} ${item.symbol.toUpperCase()}`));
         return label;
     }));
+    renderStatistics();
+}
+
+function renderStatistics() {
+    const current = pool();
+    $('selected-pool').textContent = current ? `${current.unit} ${current.symbol.toUpperCase()}` : '—';
+    $('anonymity').textContent = current?.anonymity_set == null ? '—' : `${number(current.anonymity_set)} equal user deposits`;
+    for (const [id, key] of [['deposits', 'deposits_total'], ['withdrawals', 'withdrawals_total'], ['synced-block', 'synced_block'], ['latest-block', 'latest_block']]) $(id).textContent = number(current?.[key]);
+    const updated = current?.last_update_sec == null ? null : new Date(current.last_update_sec * 1000);
+    $('last-update').textContent = updated ? updated.toLocaleString(undefined, { hourCycle: 'h23' }) : '—';
+    if (!hasProgress(current)) {
+        $('latest-block').textContent = '—';
+        $('synced-block').textContent = current?.synced_block == null ? '—' : `${number(current.synced_block)} (cached)`;
+    }
+    $('pool-state').textContent = socket?.readyState === WebSocket.OPEN
+        ? current?.message || current?.activity || stateLabel(current?.state)
+        : 'Backend disconnected. Waiting to reconnect.';
+    $('pool-address').textContent = current?.address || 'Waiting for backend';
 }
 
 function renderStatus() {
+    const connected = socket?.readyState === WebSocket.OPEN;
+    const instances = snapshot.instances;
+    const readyCount = connected ? instances.filter((item) => item.ready).length : '—';
+    $('ready-count').textContent = `${readyCount} / ${instances.length} ready`;
+    $('instances').replaceChildren(...instances.map((item) => {
+        const row = document.createElement('tr');
+        const name = element('td', `${item.unit} ${item.symbol.toUpperCase()}`);
+        name.append(element('small', item.chain, 'muted chain'));
+        name.title = item.address;
+        if (item.error) name.append(element('small', item.error, 'instance-error'));
+        const state = element('td', connected ? stateLabel(item.state) : 'Disconnected', 'state');
+        state.dataset.state = connected ? item.state : 'error';
+        if (connected && item.message) state.append(element('small', item.message, 'instance-message'));
+        if (connected && item.activity && item.activity !== item.message) state.append(element('small', item.activity, 'instance-message'));
+        const sync = element('td', null, 'sync');
+        if (hasProgress(item)) {
+            sync.textContent = `${number(item.synced_block)} / ${number(item.latest_block)}`;
+            const progress = document.createElement('progress');
+            progress.max = 1;
+            progress.value = Math.max(0, Math.min(1, item.progress));
+            progress.setAttribute('aria-label', `${item.id} block synchronization`);
+            const percent = Math.min(item.remaining_blocks > 0 ? 99.9 : 100, 100 * item.progress);
+            sync.append(progress, element('small', `${percent.toFixed(1)}%${item.remaining_blocks == null ? '' : ` · ${number(item.remaining_blocks)} blocks left`}`));
+        } else {
+            sync.textContent = item.synced_block == null ? 'Cached block —' : `Cached block ${number(item.synced_block)}`;
+            sync.append(element('small', !connected ? 'Disconnected; waiting for backend'
+                : item.latest_block == null ? 'Chain head not confirmed.' : `Last known head ${number(item.latest_block)}`));
+        }
+        const deposits = element('td', number(item.deposits_total));
+        const withdrawals = element('td', number(item.withdrawals_total));
+        deposits.title = `${number(item.deposits)} synced this session`;
+        withdrawals.title = `${number(item.withdrawals)} synced this session`;
+        row.append(name, state, sync, deposits, withdrawals);
+        return row;
+    }));
+    if (!instances.length) {
+        const row = document.createElement('tr');
+        const cell = element('td', 'Waiting for backend…', 'muted');
+        cell.colSpan = 5;
+        row.append(cell);
+        $('instances').append(row);
+    }
     const rate = snapshot.relayer_fee_rate;
     $('relayer-fee').textContent = `Service fee: ${rate == null ? 'backend configured rate' : `${rate}%`} + network gas, deducted from the deposit.`;
+    renderStatistics();
     updateControls();
 }
 

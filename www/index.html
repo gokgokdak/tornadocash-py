@@ -62,8 +62,33 @@
         </div>
       </section>
 
+      <section class="statistics" aria-labelledby="statistics-heading">
+        <h1 id="statistics-heading" class="corner">Statistics <span id="selected-pool" class="pool">—</span></h1>
+        <div class="box">
+          <p class="label">Anonymity set <span class="info" title="Total deposits made to this pool, including deposits already withdrawn.">i</span></p>
+          <p id="anonymity" class="stat-value">—</p>
+          <dl class="stats-list">
+            <div><dt>Deposits</dt><dd id="deposits">—</dd></div>
+            <div><dt>Withdrawals</dt><dd id="withdrawals">—</dd></div>
+            <div><dt>Synced block</dt><dd id="synced-block">—</dd></div>
+            <div><dt>Latest block</dt><dd id="latest-block">—</dd></div>
+            <div><dt title="Local time of the last successful synchronization update.">Last updated</dt><dd id="last-update">—</dd></div>
+          </dl>
+          <p id="pool-state" class="muted pool-state"></p>
+          <p id="pool-address" class="address muted">Waiting for backend</p>
+        </div>
+      </section>
     </div>
 
+    <section class="instances" aria-labelledby="instances-heading">
+      <div class="section-title"><h2 id="instances-heading">Backend instances</h2><span id="ready-count" class="muted">—</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Instance</th><th>Status</th><th>Block sync</th><th>Deposits</th><th>Withdrawals</th></tr></thead>
+          <tbody id="instances"><tr><td colspan="5" class="muted">Waiting for backend…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
   </main>
 
   <footer class="container"><span>Tornado Cash · Local client</span><a href="https://github.com/tornadocash/tornado-classic-ui" target="_blank" rel="noopener noreferrer">Classic UI ↗</a></footer>

@@ -127,6 +127,7 @@ def backend(monkeypatch: pytest.MonkeyPatch) -> webui.Backend:
     monkeypatch.setattr(webui.util, 'load_metadata', lambda: {ChainID.ETHEREUM: meta})
     backend = webui.Backend({ChainID.ETHEREUM})
     for item in backend.instances.values():
+        item.totals = (100, 30)
         item.tornado = FakeTornado()
     return backend
 
@@ -174,6 +175,92 @@ async def receive(socket: ClientConnection, message_type: str | None = None,
                     return message
             elif 'id' in message and message['id'] == request_id and message.get('type') != 'progress':
                 return message
+
+
+@pytest.mark.parametrize(('change', 'ready'), [
+    ({'synchronized': False}, False),
+    ({'synchronized': False, 'latest_block': None, 'last_check_sec': None}, False),
+    ({'last_check_sec': None}, True), ({'last_check_sec': time.time() - 61}, True),
+    ({'running': False}, False), ({'error': 'RPC failed'}, False),
+])
+def test_sync_readiness_is_informational(backend: webui.Backend, change: dict[str, Any], ready: bool) -> None:
+    assert backend.status()['ready']
+    backend.instances['ethereum-dai-10'].tornado.poller.state.update(change)
+    status = backend.status()
+    assert status['ready'] is ready and not status['stopping']
+    assert status['instances'][0]['state'] == 'ready'
+    assert (status['instances'][1]['state'] == 'ready') is ready
+    assert backend.dispatch('approve', PARAMS) == {'from': ACCOUNT}
+    assert backend.dispatch('approve', {**PARAMS, 'instance': 'ethereum-dai-10'}) == {'from': ACCOUNT}
+
+
+@pytest.mark.parametrize('phase', ['starting', 'error', 'proving'])
+def test_another_instance_startup_failure_or_work_does_not_block(backend: webui.Backend, phase: str) -> None:
+    item: webui.Instance = backend.instances['ethereum-dai-10']
+    if phase == 'proving':
+        item.activity = phase
+        item.lock.acquire()
+    else:
+        item.tornado = None
+        item.phase = phase
+        item.error = 'Initialization failed' if phase == 'error' else None
+    try:
+        assert backend.dispatch('approve', PARAMS) == {'from': ACCOUNT}
+    finally:
+        if phase == 'proving':
+            item.lock.release()
+
+
+@pytest.mark.parametrize('phase', ['starting', 'connecting', 'initializing'])
+def test_startup_phases_have_unknown_progress(backend: webui.Backend, monkeypatch: pytest.MonkeyPatch, phase: str) -> None:
+    monkeypatch.setattr(webui.util, 'load_metadata', Mock(side_effect=AssertionError('Status must use the loaded metadata')))
+    for item in backend.instances.values():
+        item.tornado = None
+        item.phase = phase
+    status: dict[str, Any] = backend.status()
+    assert not status['ready']
+    for row in status['instances']:
+        assert row['state'] == row['sync_state'] == phase
+        assert not row['ready']
+        assert row['message']
+        assert row['address'] == (ACCOUNT if row['id'] == INSTANCE else RECIPIENT)
+        assert row['decimals'] == 18
+        assert all(row[field] is None for field in ('synced_block', 'latest_block', 'remaining_blocks', 'progress', 'last_update_sec'))
+
+
+@pytest.mark.parametrize('updated', [None, Second(1234)])
+def test_status_reports_tornado_update_time(backend: webui.Backend, updated: Second | None) -> None:
+    tornado: FakeTornado = backend.instances[INSTANCE].tornado
+    tornado.last_update_sec = updated
+    assert backend.status()['instances'][0]['last_update_sec'] == updated
+    tornado.poller.state['last_check_sec'] = time.time() + 10
+    assert backend.status()['instances'][0]['last_update_sec'] == updated
+    tornado.last_update_sec = Second(5678)
+    assert backend.status()['instances'][0]['last_update_sec'] == Second(5678)
+
+
+def test_rpc_retry_shows_failure_without_locking_operations(backend: webui.Backend, operations: dict[str, Mock]) -> None:
+    backend.instances[INSTANCE].tornado.poller.state.update(error='RPC_CALL_RATE_LIMIT', synchronized=False)
+    status: dict[str, Any] = backend.status()
+    row: dict[str, Any] = status['instances'][0]
+    assert row['state'] == row['sync_state'] == 'retrying'
+    assert not status['ready'] and not row['ready']
+    assert row['progress'] is None and row['message']
+    assert backend.dispatch('approve', PARAMS) == {'from': ACCOUNT}
+    operations['approve_tx'].assert_called_once_with(ACCOUNT)
+
+
+@pytest.mark.parametrize('age', [61, 600])
+def test_ready_instance_keeps_progress_between_polls(backend: webui.Backend, operations: dict[str, Mock], age: int) -> None:
+    backend.instances[INSTANCE].tornado.poller.state['last_check_sec'] = time.time() - age
+    status: dict[str, Any] = backend.status()
+    row: dict[str, Any] = status['instances'][0]
+    assert row['state'] == row['sync_state'] == 'ready'
+    assert row['ready'] and status['ready']
+    assert row['synced_block'] == row['latest_block'] == 99
+    assert row['progress'] == 1 and row['remaining_blocks'] == 0
+    assert row['message'] == webui.STATUS_MESSAGES['ready'] and row['activity'] == ''
+    assert backend.dispatch('approve', PARAMS) == {'from': ACCOUNT}
 
 
 @pytest.mark.parametrize('method', ['create_note', 'approve', 'deposit', 'note_status', 'receipt'])
@@ -301,7 +388,8 @@ def test_proof_waits_before_and_after_tree_building_without_blocking_sync(backen
         try:
             assert entered.wait(1)
             row: dict[str, Any] = backend.status()['instances'][0]
-            assert row['state'] == 'syncing' and not row['ready']
+            assert row['state'] == row['sync_state'] == 'syncing'
+            assert not row['ready']
             tornado.init.assert_not_called()
             assert backend.dispatch('approve', {**PARAMS, 'instance': 'ethereum-dai-10'}) == {'from': ACCOUNT}
             synchronize()
@@ -362,21 +450,21 @@ def test_withdrawal_wakes_idle_poller_before_proving(backend: webui.Backend, ope
             head[0] = 101
             poller.last_check_sec = time.time() - age
         row: dict[str, Any] = backend.status()['instances'][0]
-        assert row['state'] == 'ready' and row['ready']
+        assert row['state'] == row['sync_state'] == 'ready' and row['ready']
         with ThreadPoolExecutor(max_workers=1) as workers:
             pending = workers.submit(backend.dispatch, method, PARAMS, cancelled)
             try:
                 assert writing.wait(1)
                 assert not pending.done()
                 row = backend.status()['instances'][0]
-                assert row['state'] == 'syncing' and not row['ready']
+                assert row['state'] == row['sync_state'] == 'syncing' and not row['ready']
                 backend.instances[INSTANCE].tornado.init.assert_not_called()
                 operation.assert_not_called()
                 release.set()
                 assert pending.result(2) == ({'hash': HASH} if method == 'relay_withdraw' else {'from': ACCOUNT})
                 operation.assert_called_once()
                 row = backend.status()['instances'][0]
-                assert row['state'] == 'ready' and row['ready']
+                assert row['state'] == row['sync_state'] == 'ready' and row['ready']
             finally:
                 cancelled.set()
                 release.set()
@@ -524,6 +612,81 @@ def test_encode_wallet_format_tx_encodes_nested_quantities_and_bytes() -> None:
 def test_encode_wallet_format_tx_rejects_failed_transaction_build() -> None:
     with pytest.raises(RuntimeError, match='Could not build transaction'):
         webui.encode_wallet_format_tx(None)
+
+
+def test_note_status_and_historical_counts(backend: webui.Backend, operations: dict[str, Mock]) -> None:
+    assert backend.dispatch('note_status', PARAMS) == {
+        'instance': INSTANCE, 'deposited': True, 'spent': False,
+        'deposits_after': 7, 'withdrawals_after': 3,
+    }
+    row = backend.status()['instances'][0]
+    assert (row['deposits'], row['withdrawals']) == (2, 1)
+    assert (row['deposits_total'], row['withdrawals_total'], row['anonymity_set']) == (100, 30, 100)
+    counter: webui.Counters = webui.Counters(backend.instances[INSTANCE])
+    for deposits, withdrawals, expected in [
+        (3, 1, (103, 31, 103)), (1, 1, (104, 32, 104)), (0, 1, (104, 33, 104)),
+    ]:
+        counter.on_sync(100, 101, [object()] * deposits, [object()] * withdrawals)
+        row = backend.status()['instances'][0]
+        assert (row['deposits_total'], row['withdrawals_total'], row['anonymity_set']) == expected
+
+
+def test_start_runs_connection_off_event_loop_and_loads_counts_before_sync(backend: webui.Backend, monkeypatch: pytest.MonkeyPatch) -> None:
+    main_thread: int             = threading.get_ident()
+    order      : list[str]       = []
+
+    def start_connection() -> bool:
+        assert threading.get_ident() != main_thread
+        rows: list[dict[str, Any]] = backend.status()['instances']
+        assert all(row['state'] == 'connecting' and row['progress'] is None for row in rows)
+        return True
+
+    connection: SimpleNamespace = SimpleNamespace(start=Mock(side_effect=start_connection), stop=Mock())
+    pollers: Mock = Mock(side_effect=FakePoller)
+    monkeypatch.setattr(webui.rpc, 'Connection', Mock(return_value=connection))
+    monkeypatch.setattr(webui, 'EventPoller', pollers)
+
+    class FakeTornado:
+
+        def __init__(self, *args: Any) -> None:
+            self.name           : str             = f'ethereum-dai-{args[2].value}'
+            self.last_update_sec: Second | None   = None
+            self.db             : SimpleNamespace = SimpleNamespace(get_event_counts=lambda: order.append('counts') or (50, 20))
+            self.un_init        : Mock            = Mock()
+
+        def init(self, sync_only: bool) -> bool:
+            assert sync_only
+            row: dict[str, Any] = next(row for row in backend.status()['instances'] if row['id'] == self.name)
+            assert row['state'] == 'initializing' and row['progress'] is None
+            order.append('init')
+            return True
+
+        def add_handler(self, handler: webui.Counters) -> None:
+            self.handler: webui.Counters = handler
+            order.append('handler')
+
+        def start_sync(self) -> bool:
+            order.append('sync')
+            assert self.handler.item.totals == (50, 20)
+            return True
+
+    monkeypatch.setattr(webui, 'Tornado', FakeTornado)
+
+    async def scenario() -> None:
+        for item in backend.instances.values():
+            item.tornado = None
+        await backend.start()
+        for item in backend.instances.values():
+            assert item.error is None
+            assert item.totals == (50, 20)
+        await backend.close()
+
+    asyncio.run(scenario())
+    assert order.count('init') == order.count('sync') == 2
+    assert pollers.call_count == 2
+    assert all(call.args == (ChainID.ETHEREUM, connection) and not call.kwargs for call in pollers.call_args_list)
+    connection.start.assert_called_once()
+    connection.stop.assert_called_once()
 
 
 def test_failed_connection_marks_all_instances_and_closes(backend: webui.Backend, monkeypatch: pytest.MonkeyPatch) -> None:
