@@ -40,7 +40,7 @@ class Tornado(EventPoller.Handler):
         self.connection         : rpc.Interface | None         = connection
         self.external           : bool                         = connection is not None  # If True, the RPC connection is managed outside
         self.initialized        : bool                         = False
-        self.sync_only          : bool                         = False  # If True, only sync events without rebuilding the merkle tree, 'withdraw()' will not be available
+        self.sync_only          : bool                         = False  # If True, only sync events; withdrawal is unavailable
         self.db                 : database.Interface           = database.create(database.Backend.SQLITE)
         self.meta               : Metadata                     = util.load_metadata()[chain]
         self.proxy_address      : ChecksumAddress              = self.meta.proxy_address
@@ -85,6 +85,8 @@ class Tornado(EventPoller.Handler):
     '''
     def init(self, sync_only: bool) -> bool:
         if self.initialized:
+            if self.sync_only and not sync_only:
+                return self._init_tree()
             log.debug(self.tag, 'init() already initialized')
             return True
         # Start RPC connection
@@ -105,20 +107,31 @@ class Tornado(EventPoller.Handler):
             self.db.close()
             return False
         # Rebuild merkle tree
-        self.sync_only = sync_only
-        if not sync_only:
-            log.info(self.tag, 'Rebuilding merkle tree from database, please wait...')
-            commitments: list[HexBytes] | None = self.db.get_commitments()
-            if commitments is None:
-                log.error(self.tag, 'init() failed to get commitments from database')
-                self.db.close()
-                return False
-            self.tree = merkle_tree.create(merkle_tree.ImplType.MEMORY, config.MERKLE_TREE_HEIGHT, commitments)
-            log.info(self.tag, 'Merkle tree ready')
+        self.sync_only = True
+        if not sync_only and not self._init_tree():
+            self.db.close()
+            return False
         # Add handlers
         self.poller.add_handler(self)
         self.initialized = True
         log.debug(self.tag, f'init()')
+        return True
+
+    def _init_tree(self) -> bool:
+        with self.mutex:
+            if self.tree is None:
+                log.info(self.tag, 'Rebuilding merkle tree from database, please wait...')
+                commitments: list[HexBytes] | None = self.db.get_commitments()
+                if commitments is None:
+                    log.error(self.tag, 'init() failed to get commitments from database')
+                    return False
+                try:
+                    self.tree = merkle_tree.create(merkle_tree.ImplType.MEMORY, config.MERKLE_TREE_HEIGHT, commitments)
+                except ValueError:
+                    log.error(self.tag, 'init() failed to rebuild the merkle tree')
+                    return False
+                log.info(self.tag, 'Merkle tree ready')
+            self.sync_only = False
         return True
 
     def un_init(self) -> None:

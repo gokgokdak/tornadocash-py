@@ -82,6 +82,76 @@ def test_prepare_uses_local_tree_without_chain_queries(tornado: core.Tornado, no
     tornado.zksnark.verify.assert_called_once()
 
 
+def test_explicit_full_init_builds_tree_atomically_and_future_sync_appends(tornado: core.Tornado, note: Note, monkeypatch: pytest.MonkeyPatch) -> None:
+    tree, tornado.tree = tornado.tree, None
+    tornado.sync_only = True
+    tornado.db.get_commitments.return_value = [note.commitment]
+
+    def create(*args: Any) -> SimpleNamespace:
+        assert tornado.mutex.locked()
+        assert args[2] == [note.commitment]
+        return tree
+
+    monkeypatch.setattr(core.merkle_tree, 'create', create)
+    assert tornado.init(sync_only=False)
+    assert tornado.tree is tree and tornado.sync_only is False
+    assert tornado.init(sync_only=False) and tornado.init(sync_only=True)
+    tornado.db.get_commitments.assert_called_once()
+    merkle_proof, proof = tornado.prepare_withdraw(note, RECIPIENT)
+    circuit = tornado.zksnark.prove.call_args.args[0]
+    assert circuit.recipient == RECIPIENT and circuit.fee == 0 and circuit.refund == 0
+    assert circuit.relayer == '0x' + '00' * 20
+    tornado.zksnark.verify.assert_called_once_with(proof)
+    core.rpc.contract_call.assert_not_called()
+    commitment = HexBytes('0x55')
+    tornado.on_sync(100, 101, [SimpleNamespace(commitment=commitment)], [])
+    tree.add.assert_called_once_with(commitment)
+    tx = tornado.withdraw_tx(note, ACCOUNT, RECIPIENT, merkle_proof, proof)
+    assert tx['from'] == ACCOUNT
+    tornado.connection.sign_transaction.assert_not_called()
+
+
+@pytest.mark.parametrize('failure', [None, ValueError('invalid leaves')])
+def test_failed_full_init_keeps_sync_only_mode(tornado: core.Tornado, monkeypatch: pytest.MonkeyPatch, failure: ValueError | None) -> None:
+    tornado.sync_only, tornado.tree = True, None
+    if failure is None:
+        tornado.db.get_commitments.return_value = None
+    else:
+        monkeypatch.setattr(core.merkle_tree, 'create', Mock(side_effect=failure))
+    assert not tornado.init(sync_only=False)
+    assert tornado.initialized and tornado.sync_only and tornado.tree is None
+    tornado.db.close.assert_not_called()
+
+
+def test_concurrent_full_init_builds_only_one_tree(tornado: core.Tornado, monkeypatch: pytest.MonkeyPatch) -> None:
+    tree, tornado.tree = tornado.tree, None
+    tornado.sync_only = True
+    create = Mock(return_value=tree)
+    monkeypatch.setattr(core.merkle_tree, 'create', create)
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        assert all(workers.map(lambda _: tornado.init(sync_only=False), range(2)))
+    create.assert_called_once()
+    assert tornado.tree is tree and not tornado.sync_only
+
+
+@pytest.mark.parametrize('sync_only', [True, False])
+def test_initialization_builds_tree_only_when_explicitly_requested(tornado: core.Tornado, monkeypatch: pytest.MonkeyPatch, sync_only: bool) -> None:
+    tree, tornado.tree = tornado.tree, None
+    tornado.initialized = False
+    tornado.connection.started = Mock(return_value=True)
+    tornado.db.open, tornado.db.check_integrity = Mock(return_value=True), Mock(return_value=True)
+    tornado.poller = SimpleNamespace(add_handler=Mock())
+    create = Mock(return_value=tree)
+    monkeypatch.setattr(core.merkle_tree, 'create', create)
+    assert tornado.init(sync_only=sync_only)
+    assert tornado.sync_only == sync_only
+    assert create.call_count == (0 if sync_only else 1)
+    assert tornado.init(sync_only=False)
+    assert tornado.tree is tree and not tornado.sync_only
+    create.assert_called_once()
+    tornado.poller.add_handler.assert_called_once_with(tornado)
+
+
 def test_sync_only_mode_never_prepares_or_submits_withdrawals(tornado: core.Tornado, note: Note, monkeypatch: pytest.MonkeyPatch) -> None:
     tornado.sync_only, tornado.tree = True, None
     get = Mock()
@@ -176,6 +246,17 @@ def relayer_requests(tornado: core.Tornado, monkeypatch: pytest.MonkeyPatch, rew
     monkeypatch.setattr(core.requests, 'post', post)
     monkeypatch.setattr(core, 'wait', lambda seconds: None)
     return get, post
+
+
+def test_relayer_reuses_preparation_after_explicit_full_init(tornado: core.Tornado, note: Note, monkeypatch: pytest.MonkeyPatch) -> None:
+    get, post = relayer_requests(tornado, monkeypatch)
+    tornado.sync_only = True
+    assert tornado.init(sync_only=False)
+    assert tornado.withdraw(note, RECIPIENT, 'https://relayer.example') == HASH
+    assert tornado.sync_only is False
+    tornado.zksnark.prove.assert_called_once()
+    assert all('timeout' not in call.kwargs for call in get.call_args_list + post.call_args_list)
+    tornado.connection.send_transaction.assert_not_called()
 
 
 @pytest.mark.parametrize('url', ['http://user:password@relayer.example', 'httpx://relayer.example'])
