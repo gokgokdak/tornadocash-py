@@ -922,6 +922,45 @@ def test_websocket_routes_create_note_to_python_backend(backend: webui.Backend) 
 
 
 @pytest.mark.parametrize('failure', [False, True])
+def test_websocket_drains_progress_when_dispatch_finishes_without_yielding(backend: webui.Backend,
+                                                                         monkeypatch: pytest.MonkeyPatch, failure: bool) -> None:
+    def dispatch(method: str, params: dict, cancelled: threading.Event, progress: Any) -> dict:
+        progress('First stage')
+        progress('Last stage')
+        if failure:
+            raise RuntimeError('Fast operation failed')
+        return {'from': ACCOUNT}
+
+    async def completed(function: Any, *args: Any, **kwargs: Any) -> Any:
+        return function(*args, **kwargs)
+
+    monkeypatch.setattr(backend, 'dispatch', dispatch)
+    monkeypatch.setattr(asyncio, 'to_thread', completed)
+
+    async def scenario() -> None:
+        async with serve(lambda socket: webui.handle_client(socket, backend), '127.0.0.1', 0) as server:
+            async with connect(f'ws://127.0.0.1:{server.sockets[0].getsockname()[1]}') as socket:
+                await socket.send(json.dumps({'id': 7, 'method': 'approve', 'params': PARAMS}))
+
+                async def read() -> list[dict]:
+                    messages: list[dict] = []
+                    while True:
+                        message: dict = json.loads(await socket.recv())
+                        if message.get('id') == 7:
+                            messages.append(message)
+                            if message.get('type') != 'progress':
+                                return messages
+
+                assert await asyncio.wait_for(read(), 2) == [
+                    {'id': 7, 'type': 'progress', 'message': 'First stage'},
+                    {'id': 7, 'type': 'progress', 'message': 'Last stage'},
+                    {'id': 7, 'error': 'Fast operation failed'} if failure else {'id': 7, 'result': {'from': ACCOUNT}},
+                ]
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('failure', [False, True])
 def test_websocket_progress_is_live_isolated_and_drained_before_result(backend: webui.Backend, operations: dict[str, Mock], failure: bool) -> None:
     release: threading.Event = threading.Event()
     first: str = 'Fetching deposit transaction nonce'

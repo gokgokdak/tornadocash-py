@@ -455,7 +455,7 @@ async def handle_client(socket: ServerConnection, backend: Backend) -> None:
             return await asyncio.to_thread(backend.dispatch, method, params, cancelled, progress)
         finally:
             active = False
-            queue.put_nowait(None)
+            loop.call_soon_threadsafe(queue.put_nowait, None)
             await publisher
 
     async def publish() -> None:
