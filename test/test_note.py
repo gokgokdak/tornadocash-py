@@ -6,6 +6,19 @@ from components.mytype import ChainID, Note, Symbol, TornadoUnit
 
 class TestNote(unittest.TestCase):
 
+    def test_invalid_notes_return_none(self) -> None:
+        nullifier, secret = '11' * 31, '22' * 31
+        invalid: list[str | None] = [
+            None, '', f'ethereum-eth-1-{nullifier[:-2]}-{secret}',
+            f'ethereum-eth-1-{nullifier}00-{secret}', f'ethereum-eth-1-{"zz" * 31}-{secret}',
+            f'unknown-eth-1-{nullifier}-{secret}',
+            f'ethereum-eth-2-{nullifier}-{secret}',
+            f'tornado-eth-1-1-0x{nullifier}{secret}',
+        ]
+        for text in invalid:
+            with self.subTest(text=text):
+                self.assertIsNone(Note.from_text(text))
+
     def test_backup_and_restore(self) -> None:
         note1 : Note = Note.create()
         backup: str  = Note.to_text(ChainID.ETHEREUM, Symbol.ETH, TornadoUnit.UNIT_1, note1)

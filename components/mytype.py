@@ -11,6 +11,7 @@ from typing import Union
 from web3 import Web3
 from web3.types import Wei
 import iden3math
+import re
 
 
 class MBytes(int):
@@ -176,18 +177,23 @@ class Note(object):
 
     @staticmethod
     def from_text(string: str) -> Union[tuple[ChainID, Symbol, TornadoUnit, 'Note'], None]:
-        parts = string.split('-')
+        if not isinstance(string, str):
+            return None
+        parts: list[str] = string.strip().split('-')
         if len(parts) != 5:
             return None
         try:
-            chain : ChainID     = string_to_chain(parts[0])
-            symbol: Symbol      = Symbol(parts[1].lower())
-            unit  : TornadoUnit = TornadoUnit(parts[2])
+            if any(re.fullmatch(r'[0-9a-f]{62}', part, re.I) is None for part in parts[3:]):
+                return None
+            chain    : ChainID     = string_to_chain(parts[0])
+            symbol   : Symbol      = Symbol(parts[1].lower())
+            unit     : TornadoUnit = TornadoUnit(parts[2])
+            nullifier: str
+            secret   : str
+            nullifier, secret = parts[3:]
+            return chain, symbol, unit, Note(bytearray.fromhex(nullifier), bytearray.fromhex(secret))
         except ValueError:
             return None
-        nullifier: bytearray   = bytearray.fromhex(parts[3]).rjust(31, b'\x00')
-        secret   : bytearray   = bytearray.fromhex(parts[4]).rjust(31, b'\x00')
-        return chain, symbol, unit, Note(nullifier, secret)
 
     @staticmethod
     def to_invoice(chain: ChainID, symbol: Symbol, unit: TornadoUnit, note: 'Note') -> str:
