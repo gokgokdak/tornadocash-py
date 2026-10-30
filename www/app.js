@@ -226,9 +226,13 @@ function updateControls() {
     $('wallet').textContent = account ? `${account.slice(0, 6)}…${account.slice(-4)}` : 'Connect wallet';
     $('wallet').title = account ? `${account} · wallet chain ${Number(walletChain) || 'unknown'}` : 'Connect an Ethereum wallet';
     $('connect-browser').disabled = busy;
+    $('browser-status').textContent = window.ethereum ? 'Detected' : 'Not detected';
+    $('browser-status').dataset.detected = !!window.ethereum;
     $('connect-walletconnect').disabled = busy;
     $('disconnect-wallet').disabled = busy;
     $('disconnect-wallet').hidden = !provider;
+    $('wallet-session').hidden = !account;
+    $('wallet-account').textContent = account ? `${account.slice(0, 6)}…${account.slice(-4)}` : '';
     $('confirm-deposit').disabled = busy;
     $('approve-token').disabled = busy;
     $('cancel-deposit').disabled = busy;

@@ -13,6 +13,8 @@ export async function connectWalletConnect(projectId, chains) {
         reject(new Error('Wallet connection cancelled.'));
     };
     dialog.addEventListener('close', cancel);
+    $('wallet-options').hidden = true;
+    $('wallet-title').textContent = 'WalletConnect';
     $('wallet-qr').hidden = false;
     $('wallet-uri').value = '';
     $('wallet-qr-image').removeAttribute('src');
@@ -68,6 +70,8 @@ export async function connectWalletConnect(projectId, chains) {
         dialog.removeEventListener('close', cancel);
         if (display) client.removeListener('display_uri', display);
         $('wallet-qr').hidden = true;
+        $('wallet-options').hidden = false;
+        $('wallet-title').textContent = 'Connect a wallet';
         dialog.close();
     }
 }

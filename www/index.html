@@ -103,17 +103,34 @@
   <footer class="container"><span>Tornado Cash · Local client</span><a href="https://github.com/tornadocash/tornado-classic-ui" target="_blank" rel="noopener noreferrer">Classic UI ↗</a></footer>
 
   <dialog id="wallet-dialog" aria-labelledby="wallet-title">
-    <h2 id="wallet-title">Connect wallet</h2>
-    <div class="note-tools"><button id="connect-browser" class="outline" type="button">Browser wallet</button><button id="connect-walletconnect" class="outline" type="button">WalletConnect</button></div>
+    <div class="wallet-heading">
+      <h2 id="wallet-title">Connect a wallet</h2>
+      <button id="close-wallet" class="wallet-close" type="button" aria-label="Close wallet selection"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button>
+    </div>
+    <div id="wallet-options">
+      <p class="wallet-intro">Choose how you’d like to connect.</p>
+      <div class="wallet-options">
+        <button id="connect-browser" class="wallet-option" type="button">
+          <span class="wallet-icons" aria-hidden="true"><img src="assets/wallets/metamask.svg" alt="" width="36" height="36"><img src="assets/wallets/onekey.svg" alt="" width="36" height="36"><img src="assets/wallets/rabby.svg" alt="" width="36" height="36"></span>
+          <span class="wallet-option-copy"><strong>Browser wallet</strong><small>MetaMask, OneKey, Rabby &amp; more</small><span id="browser-status" class="wallet-badge">Browser extension</span></span>
+          <svg class="wallet-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
+        </button>
+        <button id="connect-walletconnect" class="wallet-option" type="button">
+          <span class="wallet-icons" aria-hidden="true"><img class="walletconnect-icon" src="assets/wallets/walletconnect.svg" alt="" width="48" height="48"></span>
+          <span class="wallet-option-copy"><strong>WalletConnect</strong><small>Scan with your mobile wallet</small><span class="wallet-badge">QR code</span></span>
+          <svg class="wallet-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
+        </button>
+      </div>
+    </div>
     <div id="wallet-qr" hidden>
-      <p>Scan with your wallet, or copy the connection link into its WalletConnect screen.</p>
-      <img id="wallet-qr-image" alt="WalletConnect pairing QR code" width="256" height="256">
-      <label class="sr-only" for="wallet-uri">WalletConnect connection link</label>
+      <p class="wallet-intro">Scan with your wallet to connect.</p>
+      <div class="wallet-qr-frame"><img id="wallet-qr-image" alt="WalletConnect pairing QR code" width="256" height="256"></div>
+      <label class="wallet-link-label" for="wallet-uri">Or use the connection link</label>
       <input id="wallet-uri" readonly autocomplete="off" spellcheck="false">
       <button id="copy-wallet-uri" class="outline full" type="button">Copy connection link</button>
     </div>
     <p id="wallet-message" role="status" aria-live="polite"></p>
-    <div class="note-tools"><button id="disconnect-wallet" type="button" hidden>Disconnect</button><button id="close-wallet" type="button">Close</button></div>
+    <div id="wallet-session" class="wallet-session" hidden><span id="wallet-account"></span><button id="disconnect-wallet" type="button" hidden>Disconnect</button></div>
   </dialog>
 
   <dialog id="backup-dialog" aria-labelledby="backup-title">
