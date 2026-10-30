@@ -151,18 +151,18 @@ class EventPoller(object):
             pass
 
     def __init__(self, chain: ChainID, connection: rpc.Interface | None = None) -> None:
-        self.tag        : str                       = f'{__class__.__name__}@{upper_first_char(chain_to_string(chain))}'
-        self.off        : bool                      = True
-        self.chain      : ChainID                   = chain
-        self.connection : rpc.Interface | None      = connection  # If True, the RPC connection is managed outside
-        self.external   : bool                      = connection is not None
-        self.meta       : util.Metadata             = util.load_metadata()[chain]
-        self.contract   : ChecksumAddress | None    = None
-        self.events     : list[LogEvent]            = [EventDeposit(), EventWithdraw()]
-        self.current    : int                       = 0
-        self.cond       : threading.Condition       = threading.Condition()
-        self.worker     : threading.Thread | None   = None
-        self.handlers    : list[EventPoller.Handler] = []
+        self.tag           : str                       = f'{__class__.__name__}@{upper_first_char(chain_to_string(chain))}'
+        self.off           : bool                      = True
+        self.chain         : ChainID                   = chain
+        self.connection    : rpc.Interface | None      = connection  # If True, the RPC connection is managed outside
+        self.external      : bool                      = connection is not None
+        self.meta          : util.Metadata             = util.load_metadata()[chain]
+        self.contract      : ChecksumAddress | None    = None
+        self.events        : list[LogEvent]            = [EventDeposit(), EventWithdraw()]
+        self.current       : int                       = 0
+        self.cond          : threading.Condition       = threading.Condition()
+        self.worker        : threading.Thread | None   = None
+        self.handlers      : list[EventPoller.Handler] = []
         if self.connection is None:
             self.connection = rpc.Connection(self.chain, config.RPC_URLS[self.chain])
 
